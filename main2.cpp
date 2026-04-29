@@ -150,8 +150,14 @@ void addFaceToVertices(std::vector<float>& verts,
         {1, 64}, {2, 64}, {3, 64}, {4, 64}, {5, 8}, 
         {6, 64}, {7, 64}, {8, 32}, {9, 16}
     };
-    void drawDimOverlay(int screenW, int screenH, float alpha);
-    void renderInventory(int screenW, int screenH);
+void drawDimOverlay(int screenW, int screenH, float alpha);
+void renderInventory(int screenW, int screenH);
+unsigned int loadUITexture(const char* path);
+void drawRectangle(float x, float y, float w, float h, unsigned int texture, int screenW, int screenH);
+float fitMinecraftTextScale(const std::string& text, float maxWidth, float maxHeight);
+void drawMinecraftTextCentered(const std::string& text, float centerX, float centerY, float scale, int screenW, int screenH, const glm::vec4& color);
+const char* tr(const char* en, const char* ru, const char* jp);
+extern double mouseX, mouseY;
 // Добавьте эти строки в секцию прототипов функций (примерно строка 63)
 struct Slider;
 void loadSliderTextures();
