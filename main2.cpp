@@ -4193,7 +4193,7 @@ void renderMainMenuOptions(int screenW, int screenH) {
     // Тот же фон, что и в главном меню
     if (menuBackgroundLightTexture || menuBackgroundTexture)
         drawTiledBackground(menuBackgroundLightTexture != 0 ? menuBackgroundLightTexture : menuBackgroundTexture, screenW, screenH);
-    drawMinecraftTextCentered("Options", screenW * 0.5f, screenH * 0.08f, 3.12f, screenW, screenH, glm::vec4(1.0f));
+    drawMinecraftTextCentered("Options", screenW * 0.5f, screenH * 0.08f, 2.6f, screenW, screenH, glm::vec4(1.0f));
     for (const auto& slider : optionsSliders) {
         drawSlider(slider, screenW, screenH);
     }
@@ -4399,7 +4399,6 @@ void updateMainMenuOptions(GLFWwindow* window) {
 }
 
 void updateOptionsLayout(int screenW, int screenH) {
-    const float yOffset = screenH * 0.10f;
     const float topY = screenH * 0.15f;
     const float buttonW = OPTIONS_BUTTON_W;
     const float buttonH = OPTIONS_BUTTON_H;
@@ -4411,7 +4410,7 @@ void updateOptionsLayout(int screenW, int screenH) {
     // FOV в левом верхнем блоке
     if (!optionsSliders.empty()) {
         optionsSliders[0].relX = (leftX + buttonW * 0.5f) / screenW;
-        optionsSliders[0].relY = (topY + yOffset) / screenH;
+        optionsSliders[0].relY = topY / screenH;
         optionsSliders[0].relW = buttonW / screenW;
         optionsSliders[0].relH = buttonH / screenH;
         updateSliderPosition(optionsSliders[0], screenW, screenH);
@@ -4422,7 +4421,7 @@ void updateOptionsLayout(int screenW, int screenH) {
     optionsDifficultyButton.absW = buttonW;
     optionsDifficultyButton.absH = buttonH;
     optionsDifficultyButton.absX = rightX;
-    optionsDifficultyButton.absY = topY - buttonH * 0.5f + yOffset;
+    optionsDifficultyButton.absY = topY - buttonH * 0.5f;
 
     // Структура как на скриншоте
     // Одиночная кнопка справа под Difficulty
