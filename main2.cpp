@@ -150,8 +150,14 @@ void addFaceToVertices(std::vector<float>& verts,
         {1, 64}, {2, 64}, {3, 64}, {4, 64}, {5, 8}, 
         {6, 64}, {7, 64}, {8, 32}, {9, 16}
     };
-    void drawDimOverlay(int screenW, int screenH, float alpha);
-    void renderInventory(int screenW, int screenH);
+void drawDimOverlay(int screenW, int screenH, float alpha);
+void renderInventory(int screenW, int screenH);
+unsigned int loadUITexture(const char* path);
+void drawRectangle(float x, float y, float w, float h, unsigned int texture, int screenW, int screenH);
+float fitMinecraftTextScale(const std::string& text, float maxWidth, float maxHeight);
+void drawMinecraftTextCentered(const std::string& text, float centerX, float centerY, float scale, int screenW, int screenH, const glm::vec4& color);
+const char* tr(const char* en, const char* ru, const char* jp);
+extern double mouseX, mouseY;
 // Добавьте эти строки в секцию прототипов функций (примерно строка 63)
 struct Slider;
 void loadSliderTextures();
@@ -1678,6 +1684,7 @@ void main() {
 // Текстуры для слайдера
 unsigned int sliderTrackTexture = 0;
 unsigned int sliderThumbTexture = 0;
+std::vector<Slider> optionsSliders;
 
 // Загрузка текстур слайдера
 void loadSliderTextures() {
@@ -1716,32 +1723,34 @@ bool isMouseOverSlider(const Slider& slider, double mouseX, double mouseY) {
 // Отрисовка слайдера
 void drawSlider(const Slider& slider, int screenW, int screenH) {
     if (!sliderTrackTexture || !sliderThumbTexture) return;
-    
-    float trackHeight = slider.absH * 0.3f; // Высота дорожки - 30% от общей высоты
-    float trackY = slider.absY + (slider.absH - trackHeight) / 2;
-    float thumbSize = slider.absH * 0.8f;   // Размер ползунка - 80% от высоты
+    const float trackWidth = 200.0f;
+    const float trackHeight = 20.0f;
+    const float thumbWidth = 8.0f;
+    const float thumbHeight = 20.0f;
+    const float trackX = slider.absX + (slider.absW - trackWidth) * 0.5f;
+    const float trackY = slider.absY + (slider.absH - trackHeight) * 0.5f;
     
     // Проверка наведения
     bool hovered = isMouseOverSlider(slider, mouseX, mouseY) || slider.isDragging;
     
     // Рисуем дорожку слайдера
-    drawRectangle(slider.absX, trackY, slider.absW, trackHeight, 
+    drawRectangle(trackX, trackY, trackWidth, trackHeight, 
                   sliderTrackTexture, screenW, screenH);
     
     // Вычисляем позицию ползунка
     float normalizedValue = (*slider.value - slider.minValue) / (slider.maxValue - slider.minValue);
     normalizedValue = glm::clamp(normalizedValue, 0.0f, 1.0f);
-    float thumbX = slider.absX + normalizedValue * (slider.absW - thumbSize);
-    float thumbY = slider.absY + (slider.absH - thumbSize) / 2;
+    float thumbX = trackX + normalizedValue * (trackWidth - thumbWidth);
+    float thumbY = trackY + (trackHeight - thumbHeight) * 0.5f;
     
     // Рисуем ползунок
     unsigned int thumbTex = sliderThumbTexture;
     if (menuButtonHighlightTexture && hovered) {
         // Используем highlight текстуру при наведении
-        drawRectangle(thumbX - 2, thumbY - 2, thumbSize + 4, thumbSize + 4, 
+        drawRectangle(thumbX - 1, thumbY, thumbWidth + 2, thumbHeight, 
                      menuButtonHighlightTexture, screenW, screenH);
     }
-    drawRectangle(thumbX, thumbY, thumbSize, thumbSize, thumbTex, screenW, screenH);
+    drawRectangle(thumbX, thumbY, thumbWidth, thumbHeight, thumbTex, screenW, screenH);
     
     // Формируем текст слайдера
     std::string displayText = std::string(slider.label) + ": " + 
@@ -1752,14 +1761,12 @@ void drawSlider(const Slider& slider, int screenW, int screenH) {
         glm::vec4(1.0f, 0.93f, 0.62f, 1.0f) :  // Желтоватый при наведении
         glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);     // Белый обычный
     
-    float scale = fitMinecraftTextScale(displayText, 
-                                       slider.absW * 0.8f, 
-                                       slider.absH * 0.4f);
+    float scale = fitMinecraftTextScale(displayText, trackWidth * 0.92f, trackHeight * 0.8f);
     
     drawMinecraftTextCentered(
         displayText,
-        slider.absX + slider.absW * 0.5f,
-        slider.absY - slider.absH * 0.15f,  // Текст над слайдером
+        trackX + trackWidth * 0.5f,
+        trackY + trackHeight * 0.52f,
         scale,
         screenW,
         screenH,
@@ -1769,7 +1776,14 @@ void drawSlider(const Slider& slider, int screenW, int screenH) {
 
 // Обработка кликов по слайдеру
 bool handleSliderClick(Slider& slider, double mouseX, double mouseY) {
-    if (!isMouseOverSlider(slider, mouseX, mouseY)) {
+    const float trackWidth = 200.0f;
+    const float trackHeight = 20.0f;
+    const float thumbWidth = 8.0f;
+    const float trackX = slider.absX + (slider.absW - trackWidth) * 0.5f;
+    const float trackY = slider.absY + (slider.absH - trackHeight) * 0.5f;
+    const bool insideTrack = mouseX >= trackX && mouseX <= trackX + trackWidth &&
+                             mouseY >= trackY && mouseY <= trackY + trackHeight;
+    if (!insideTrack) {
         slider.isDragging = false;
         return false;
     }
@@ -1777,9 +1791,8 @@ bool handleSliderClick(Slider& slider, double mouseX, double mouseY) {
     slider.isDragging = true;
     
     // Вычисляем новое значение на основе позиции мыши
-    float thumbSize = slider.absH * 0.8f;
-    float relativeX = (float)(mouseX - slider.absX - thumbSize / 2) / 
-                     (slider.absW - thumbSize);
+    float relativeX = (float)(mouseX - trackX - thumbWidth * 0.5f) /
+                     (trackWidth - thumbWidth);
     relativeX = glm::clamp(relativeX, 0.0f, 1.0f);
     
     float rawValue = slider.minValue + relativeX * (slider.maxValue - slider.minValue);
@@ -1796,10 +1809,11 @@ bool handleSliderClick(Slider& slider, double mouseX, double mouseY) {
 // Обработка перетаскивания слайдера
 void handleSliderDrag(Slider& slider, double mouseX, double mouseY) {
     if (!slider.isDragging) return;
-    
-    float thumbSize = slider.absH * 0.8f;
-    float relativeX = (float)(mouseX - slider.absX - thumbSize / 2) / 
-                     (slider.absW - thumbSize);
+    const float trackWidth = 200.0f;
+    const float thumbWidth = 8.0f;
+    const float trackX = slider.absX + (slider.absW - trackWidth) * 0.5f;
+    float relativeX = (float)(mouseX - trackX - thumbWidth * 0.5f) / 
+                     (trackWidth - thumbWidth);
     relativeX = glm::clamp(relativeX, 0.0f, 1.0f);
     
     float rawValue = slider.minValue + relativeX * (slider.maxValue - slider.minValue);
@@ -1841,23 +1855,6 @@ void initFOVSlider(std::vector<Slider>& sliders) {
     fovSlider.decimalPlaces = 0;  // Целое число, без десятичных знаков
     
     sliders.push_back(fovSlider);
-}
-
-// Или если хотите отдельную переменную для слайдера FOV:
-Slider fovSlider;  // Глобальная переменная для слайдера FOV
-
-void initFOVSlider() {
-    fovSlider.relX = 0.5f - 0.05f;  // 5% левее от середины (0.45 или 45% ширины)
-    fovSlider.relY = 0.1f;           // 10% от верха
-    fovSlider.relW = 0.4f;          // 40% ширины экрана
-    fovSlider.relH = 0.08f;         // 8% высоты экрана
-    fovSlider.label = tr("FOV", "FOV", "FOV");
-    fovSlider.minValue = 30.0f;
-    fovSlider.maxValue = 110.0f;
-    fovSlider.value = &currentFOV;
-    fovSlider.step = 1.0f;
-    fovSlider.isDragging = false;
-    fovSlider.decimalPlaces = 0;    // Без десятичных знаков
 }
 
 void initUI() {
@@ -4180,7 +4177,12 @@ void renderMainMenuOptions(int screenW, int screenH) {
     // Тот же фон, что и в главном меню
     if (menuBackgroundLightTexture || menuBackgroundTexture)
         drawTiledBackground(menuBackgroundLightTexture != 0 ? menuBackgroundLightTexture : menuBackgroundTexture, screenW, screenH);
-    // Кнопка "Back" - ВРЕМЕННО, пока нет других кнопок
+    drawMinecraftTextCentered("Options", screenW * 0.5f, screenH * 0.14f, 2.6f, screenW, screenH, glm::vec4(1.0f));
+    for (const auto& slider : optionsSliders) {
+        drawSlider(slider, screenW, screenH);
+    }
+
+    // Кнопка "Back"
     float backBtnW = 200.0f, backBtnH = 50.0f;
     float backBtnX = (screenW - backBtnW) * 0.5f;
     float backBtnY = screenH - 100.0f;
@@ -4380,6 +4382,9 @@ void handleLanguageMenuClick(GLFWwindow* window, int button) {
 
 void updateMainMenuOptions(GLFWwindow* window) {
     static bool escWasPressed = false;
+    int w = 0, h = 0;
+    glfwGetWindowSize(window, &w, &h);
+    updateSliderPositions(optionsSliders, w, h);
     
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
         if (!escWasPressed) {
@@ -4564,9 +4569,9 @@ void processInputInGame(GLFWwindow* window, float deltaTime) {
     bool atWaterSurface = waistInWater && !headInWater;
     static bool wasInWaterLastFrame = false;
 
-    // В воде гравитация и скорость заметно слабее, но не выключаются полностью.
-    float currentGravity = inWater ? GRAVITY * 0.18f : GRAVITY;
-    float moveSpeed = inWater ? WALK_SPEED * 0.38f : WALK_SPEED;
+    // В воде гравитация и скорость слабее, но не "ватные" как раньше.
+    float currentGravity = inWater ? GRAVITY * 0.12f : GRAVITY;
+    float moveSpeed = inWater ? WALK_SPEED * 0.62f : WALK_SPEED;
 
     glm::vec3 moveDir(0.0f);
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) moveDir += cameraFront;
@@ -4578,12 +4583,13 @@ void processInputInGame(GLFWwindow* window, float deltaTime) {
     if (moving) moveDir = glm::normalize(moveDir);
     glm::vec3 desiredMove = moveDir * moveSpeed * deltaTime;
     
-    // Прыжок/всплытие
+    // Прыжок/всплытие и погружение
     const bool wantsSwimUp = glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
+    const bool wantsDiveDown = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS;
     if (wantsSwimUp) {
         if (inWater) {
-            const float swimImpulse = fullySubmerged ? 2.8f : 1.4f;
-            playerVelocity.y = std::min(playerVelocity.y + swimImpulse * deltaTime * 6.0f, fullySubmerged ? 2.0f : 0.9f);
+            const float swimImpulse = fullySubmerged ? 3.8f : 2.0f;
+            playerVelocity.y = std::min(playerVelocity.y + swimImpulse * deltaTime * 7.5f, fullySubmerged ? 2.6f : 1.2f);
         } else if (isOnGround) {
             playerVelocity.y = JUMP_POWER;
             isOnGround = false;
@@ -4593,16 +4599,22 @@ void processInputInGame(GLFWwindow* window, float deltaTime) {
     playerVelocity.y += currentGravity * deltaTime;
 
     if (inWater) {
-        // Вода сильно гасит вертикальную скорость.
-        playerVelocity.y *= 0.78f;
+        // Вода гасит вертикальную скорость, но оставляет ощущение инерции.
+        playerVelocity.y *= 0.86f;
 
         if (fullySubmerged) {
-            // Под водой игрок немного всплывает, но остаётся "тяжёлым".
-            playerVelocity.y = std::min(playerVelocity.y + 0.35f * deltaTime, 1.2f);
+            // Под водой игрок слабо всплывает, но может уверенно погружаться через Shift.
+            if (wantsDiveDown && !wantsSwimUp) {
+                playerVelocity.y = std::max(playerVelocity.y - 8.5f * deltaTime, -2.3f);
+            } else {
+                playerVelocity.y = std::min(playerVelocity.y + 0.55f * deltaTime, 1.5f);
+            }
         } else if (atWaterSurface) {
             // На поверхности держим голову у кромки воды, но не позволяем левитировать над ней.
             if (wantsSwimUp) {
-                playerVelocity.y = std::min(playerVelocity.y, 0.6f);
+                playerVelocity.y = std::min(playerVelocity.y, 0.9f);
+            } else if (wantsDiveDown) {
+                playerVelocity.y = std::max(playerVelocity.y - 7.0f * deltaTime, -1.6f);
             } else {
                 playerVelocity.y = std::min(playerVelocity.y, 0.0f);
                 if (playerVelocity.y > -0.55f) {
@@ -4615,7 +4627,7 @@ void processInputInGame(GLFWwindow* window, float deltaTime) {
             }
         }
 
-        playerVelocity.y = std::clamp(playerVelocity.y, -2.8f, 2.0f);
+        playerVelocity.y = std::clamp(playerVelocity.y, -3.2f, 2.6f);
     } else if (wasInWaterLastFrame && playerVelocity.y > 0.0f) {
         // При выходе из воды резко гасим остаточный подъём, чтобы игрок не "парил" над поверхностью.
         playerVelocity.y *= 0.28f;
@@ -4880,22 +4892,34 @@ void handlePauseMenuClick(GLFWwindow* window, int button) {
 // Коллбэки GLFW
 // ----------------------------------------------------------------------
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
-    if (action != GLFW_PRESS) return;
-
     if (currentState == GameState::MAIN_MENU) {
+        if (action != GLFW_PRESS) return;
         handleMainMenuClick(window, button);
     } else if (currentState == GameState::WORLD_SELECT_MENU) {
+        if (action != GLFW_PRESS) return;
         handleWorldSelectMenuClick(window, button);
     }else if (currentState == GameState::MAIN_MENU_OPTIONS) {
-        handleMainMenuOptionsClick(window, button);
+        if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
+            double mx, my;
+            glfwGetCursorPos(window, &mx, &my);
+            for (auto& slider : optionsSliders) {
+                if (handleSliderClick(slider, mx, my)) return;
+            }
+        } else if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE) {
+            for (auto& slider : optionsSliders) releaseSlider(slider);
+        }
+        if (action == GLFW_PRESS) handleMainMenuOptionsClick(window, button);
     } else if (currentState == GameState::PAUSE_MENU) {
+        if (action != GLFW_PRESS) return;
         handlePauseMenuClick(window, button);
     }else if (currentState == GameState::CREATIVE_INVENTORY) {
         // Заглушка
         return;
     } else if (currentState == GameState::LANGUAGE_MENU) {
+        if (action != GLFW_PRESS) return;
         handleLanguageMenuClick(window, button);
     } else if (currentState == GameState::IN_GAME) {
+        if (action != GLFW_PRESS) return;
         if (!movementEnabled) return;
         glm::vec3 rayDir = cameraFront;
         int hx, hy, hz, face;
@@ -4938,6 +4962,11 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
 void cursor_pos_callback(GLFWwindow* window, double x, double y) {
     mouseX = x;
     mouseY = y;
+    if (currentState == GameState::MAIN_MENU_OPTIONS) {
+        for (auto& slider : optionsSliders) {
+            handleSliderDrag(slider, x, y);
+        }
+    }
     if (currentState != GameState::IN_GAME || gamePaused) return;
     if (firstMouse) {
         lastX = x;
@@ -5076,6 +5105,8 @@ int main() {
 
     if (!loadBlockConfig("blocks.json")) return -1;
     initUI(); loadMenuTextures(); loadHUDTextures(); initLanguageMenu();
+    loadSliderTextures();
+    initFOVSlider(optionsSliders);
     if (fs::exists("sounds/hurtflesh1.ogg")) {
         soundManager.loadPlayerSound("hurt", "sounds/hurtflesh1.ogg");
     }
