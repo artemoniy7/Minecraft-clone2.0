@@ -1,0 +1,62 @@
+{
+    "blocks": [
+      {
+        "id": 2,
+        "name": "dirt",
+        "texture_strip": "textures/blocks/dirt_strip.png",
+        "transparent": false
+      },
+      {
+        "id": 5,
+        "name": "water",
+        "texture_strip": "textures/blocks/water.png",
+        "transparent": true
+      },
+      {
+        "id":3,
+        "name": "stone",
+        "texture_strip": "textures/blocks/stone_strip.png",
+        "transparent": false,
+        "sounds":{
+          "step": "Stone_step*.ogg"
+        }
+      },
+      {
+        "id": 1,
+        "name": "grass",
+        "texture_strip":"textures/blocks/grass_strip.png",
+        "transparent": false,
+        "sounds": {
+          "step": "Grass_step*.ogg"
+        }
+      },
+      {
+        "id":4,
+        "name": "sand",
+        "texture_strip":"textures/blocks/sand_strip.png",
+        "transparent": false,
+        "sounds":{
+          "step": "Sand_step*.ogg"
+        }
+      },
+      {
+        "id": 6,
+        "name": "oak_log",
+        "texture_strip":"textures/blocks/oak_log_strip.png",
+        "transparent": false
+      },
+      {
+        "id": 7,
+        "name": "oak_leaves",
+        "texture_strip": "textures/blocks/oak_leaves_strip.png",
+        "transparent": true
+      },
+      {
+        "id": 8,
+        "name": "glowstone",
+        "texture_strip": "textures/blocks/glowstone_strip.png",
+        "transparent": false,
+        "light": 8
+      }
+    ]
+  }
