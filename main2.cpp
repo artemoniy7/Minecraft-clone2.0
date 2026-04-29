@@ -1695,7 +1695,7 @@ std::vector<Slider> optionsSliders;
 constexpr float OPTIONS_UI_SCALE = 1.3f;
 constexpr float OPTIONS_BUTTON_W = 430.0f * OPTIONS_UI_SCALE;
 constexpr float OPTIONS_BUTTON_H = 58.0f * OPTIONS_UI_SCALE;
-constexpr float OPTIONS_SLIDER_TRACK_W = OPTIONS_BUTTON_W;
+constexpr float OPTIONS_SLIDER_TRACK_W = OPTIONS_BUTTON_W * 1.1f;
 constexpr float OPTIONS_SLIDER_TRACK_H = OPTIONS_BUTTON_H;
 constexpr float OPTIONS_SLIDER_THUMB_W = 16.0f * OPTIONS_UI_SCALE;
 constexpr float OPTIONS_SLIDER_THUMB_H = OPTIONS_BUTTON_H;
@@ -1761,11 +1761,6 @@ void drawSlider(const Slider& slider, int screenW, int screenH) {
     
     // Рисуем ползунок
     unsigned int thumbTex = sliderThumbTexture;
-    if (menuButtonHighlightTexture && hovered) {
-        // Используем highlight текстуру при наведении
-        drawRectangle(thumbX - 1, thumbY, thumbWidth + 2, thumbHeight, 
-                     menuButtonHighlightTexture, screenW, screenH);
-    }
     drawRectangle(thumbX, thumbY, thumbWidth, thumbHeight, thumbTex, screenW, screenH);
     
     // Формируем текст слайдера
