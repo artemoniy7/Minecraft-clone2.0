@@ -4564,9 +4564,9 @@ void processInputInGame(GLFWwindow* window, float deltaTime) {
     bool atWaterSurface = waistInWater && !headInWater;
     static bool wasInWaterLastFrame = false;
 
-    // В воде гравитация и скорость заметно слабее, но не выключаются полностью.
-    float currentGravity = inWater ? GRAVITY * 0.18f : GRAVITY;
-    float moveSpeed = inWater ? WALK_SPEED * 0.38f : WALK_SPEED;
+    // В воде гравитация и скорость слабее, но не "ватные" как раньше.
+    float currentGravity = inWater ? GRAVITY * 0.12f : GRAVITY;
+    float moveSpeed = inWater ? WALK_SPEED * 0.62f : WALK_SPEED;
 
     glm::vec3 moveDir(0.0f);
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) moveDir += cameraFront;
@@ -4578,12 +4578,13 @@ void processInputInGame(GLFWwindow* window, float deltaTime) {
     if (moving) moveDir = glm::normalize(moveDir);
     glm::vec3 desiredMove = moveDir * moveSpeed * deltaTime;
     
-    // Прыжок/всплытие
+    // Прыжок/всплытие и погружение
     const bool wantsSwimUp = glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
+    const bool wantsDiveDown = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS;
     if (wantsSwimUp) {
         if (inWater) {
-            const float swimImpulse = fullySubmerged ? 2.8f : 1.4f;
-            playerVelocity.y = std::min(playerVelocity.y + swimImpulse * deltaTime * 6.0f, fullySubmerged ? 2.0f : 0.9f);
+            const float swimImpulse = fullySubmerged ? 3.8f : 2.0f;
+            playerVelocity.y = std::min(playerVelocity.y + swimImpulse * deltaTime * 7.5f, fullySubmerged ? 2.6f : 1.2f);
         } else if (isOnGround) {
             playerVelocity.y = JUMP_POWER;
             isOnGround = false;
@@ -4593,16 +4594,22 @@ void processInputInGame(GLFWwindow* window, float deltaTime) {
     playerVelocity.y += currentGravity * deltaTime;
 
     if (inWater) {
-        // Вода сильно гасит вертикальную скорость.
-        playerVelocity.y *= 0.78f;
+        // Вода гасит вертикальную скорость, но оставляет ощущение инерции.
+        playerVelocity.y *= 0.86f;
 
         if (fullySubmerged) {
-            // Под водой игрок немного всплывает, но остаётся "тяжёлым".
-            playerVelocity.y = std::min(playerVelocity.y + 0.35f * deltaTime, 1.2f);
+            // Под водой игрок слабо всплывает, но может уверенно погружаться через Shift.
+            if (wantsDiveDown && !wantsSwimUp) {
+                playerVelocity.y = std::max(playerVelocity.y - 8.5f * deltaTime, -2.3f);
+            } else {
+                playerVelocity.y = std::min(playerVelocity.y + 0.55f * deltaTime, 1.5f);
+            }
         } else if (atWaterSurface) {
             // На поверхности держим голову у кромки воды, но не позволяем левитировать над ней.
             if (wantsSwimUp) {
-                playerVelocity.y = std::min(playerVelocity.y, 0.6f);
+                playerVelocity.y = std::min(playerVelocity.y, 0.9f);
+            } else if (wantsDiveDown) {
+                playerVelocity.y = std::max(playerVelocity.y - 7.0f * deltaTime, -1.6f);
             } else {
                 playerVelocity.y = std::min(playerVelocity.y, 0.0f);
                 if (playerVelocity.y > -0.55f) {
@@ -4615,7 +4622,7 @@ void processInputInGame(GLFWwindow* window, float deltaTime) {
             }
         }
 
-        playerVelocity.y = std::clamp(playerVelocity.y, -2.8f, 2.0f);
+        playerVelocity.y = std::clamp(playerVelocity.y, -3.2f, 2.6f);
     } else if (wasInWaterLastFrame && playerVelocity.y > 0.0f) {
         // При выходе из воды резко гасим остаточный подъём, чтобы игрок не "парил" над поверхностью.
         playerVelocity.y *= 0.28f;
