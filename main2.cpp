@@ -4203,7 +4203,7 @@ void renderMainMenuOptions(int screenW, int screenH) {
         unsigned int tex = (menuButtonHighlightTexture && hovered) ? menuButtonHighlightTexture : menuButtonTexture;
         drawRectangle(btn.absX, btn.absY, btn.absW, btn.absH, tex, screenW, screenH);
         drawMinecraftTextCentered(btn.label, btn.absX + btn.absW * 0.5f, btn.absY + btn.absH * 0.52f,
-            fitMinecraftButtonTextScale(btn.label, btn.absW, btn.absH) * 1.2f, screenW, screenH, getMenuTextColor(hovered));
+            fitMinecraftButtonTextScale(btn.label, btn.absW, btn.absH), screenW, screenH, getMenuTextColor(hovered));
     };
     drawOptButton(optionsDifficultyButton);
     for (int i = 0; i < OPTIONS_ROW1_BUTTON_COUNT; ++i) drawOptButton(optionsRow1Buttons[i]);
