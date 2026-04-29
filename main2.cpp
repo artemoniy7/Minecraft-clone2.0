@@ -1685,6 +1685,10 @@ void main() {
 unsigned int sliderTrackTexture = 0;
 unsigned int sliderThumbTexture = 0;
 std::vector<Slider> optionsSliders;
+constexpr float OPTIONS_SLIDER_TRACK_W = 320.0f;
+constexpr float OPTIONS_SLIDER_TRACK_H = 28.0f;
+constexpr float OPTIONS_SLIDER_THUMB_W = 12.0f;
+constexpr float OPTIONS_SLIDER_THUMB_H = 28.0f;
 
 // Загрузка текстур слайдера
 void loadSliderTextures() {
@@ -1716,17 +1720,19 @@ std::string formatSliderValue(float value, int decimalPlaces) {
 
 // Проверка, находится ли мышь над слайдером
 bool isMouseOverSlider(const Slider& slider, double mouseX, double mouseY) {
-    return mouseX >= slider.absX && mouseX <= slider.absX + slider.absW &&
-           mouseY >= slider.absY && mouseY <= slider.absY + slider.absH;
+    const float trackX = slider.absX + (slider.absW - OPTIONS_SLIDER_TRACK_W) * 0.5f;
+    const float trackY = slider.absY + (slider.absH - OPTIONS_SLIDER_TRACK_H) * 0.5f;
+    return mouseX >= trackX && mouseX <= trackX + OPTIONS_SLIDER_TRACK_W &&
+           mouseY >= trackY && mouseY <= trackY + OPTIONS_SLIDER_TRACK_H;
 }
 
 // Отрисовка слайдера
 void drawSlider(const Slider& slider, int screenW, int screenH) {
     if (!sliderTrackTexture || !sliderThumbTexture) return;
-    const float trackWidth = 200.0f;
-    const float trackHeight = 20.0f;
-    const float thumbWidth = 8.0f;
-    const float thumbHeight = 20.0f;
+    const float trackWidth = OPTIONS_SLIDER_TRACK_W;
+    const float trackHeight = OPTIONS_SLIDER_TRACK_H;
+    const float thumbWidth = OPTIONS_SLIDER_THUMB_W;
+    const float thumbHeight = OPTIONS_SLIDER_THUMB_H;
     const float trackX = slider.absX + (slider.absW - trackWidth) * 0.5f;
     const float trackY = slider.absY + (slider.absH - trackHeight) * 0.5f;
     
@@ -1776,9 +1782,9 @@ void drawSlider(const Slider& slider, int screenW, int screenH) {
 
 // Обработка кликов по слайдеру
 bool handleSliderClick(Slider& slider, double mouseX, double mouseY) {
-    const float trackWidth = 200.0f;
-    const float trackHeight = 20.0f;
-    const float thumbWidth = 8.0f;
+    const float trackWidth = OPTIONS_SLIDER_TRACK_W;
+    const float trackHeight = OPTIONS_SLIDER_TRACK_H;
+    const float thumbWidth = OPTIONS_SLIDER_THUMB_W;
     const float trackX = slider.absX + (slider.absW - trackWidth) * 0.5f;
     const float trackY = slider.absY + (slider.absH - trackHeight) * 0.5f;
     const bool insideTrack = mouseX >= trackX && mouseX <= trackX + trackWidth &&
@@ -1809,8 +1815,8 @@ bool handleSliderClick(Slider& slider, double mouseX, double mouseY) {
 // Обработка перетаскивания слайдера
 void handleSliderDrag(Slider& slider, double mouseX, double mouseY) {
     if (!slider.isDragging) return;
-    const float trackWidth = 200.0f;
-    const float thumbWidth = 8.0f;
+    const float trackWidth = OPTIONS_SLIDER_TRACK_W;
+    const float thumbWidth = OPTIONS_SLIDER_THUMB_W;
     const float trackX = slider.absX + (slider.absW - trackWidth) * 0.5f;
     float relativeX = (float)(mouseX - trackX - thumbWidth * 0.5f) / 
                      (trackWidth - thumbWidth);
