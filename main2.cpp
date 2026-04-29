@@ -1723,32 +1723,34 @@ bool isMouseOverSlider(const Slider& slider, double mouseX, double mouseY) {
 // Отрисовка слайдера
 void drawSlider(const Slider& slider, int screenW, int screenH) {
     if (!sliderTrackTexture || !sliderThumbTexture) return;
-    
-    float trackHeight = slider.absH * 0.3f; // Высота дорожки - 30% от общей высоты
-    float trackY = slider.absY + (slider.absH - trackHeight) / 2;
-    float thumbSize = slider.absH * 0.8f;   // Размер ползунка - 80% от высоты
+    const float trackWidth = 200.0f;
+    const float trackHeight = 20.0f;
+    const float thumbWidth = 8.0f;
+    const float thumbHeight = 20.0f;
+    const float trackX = slider.absX + (slider.absW - trackWidth) * 0.5f;
+    const float trackY = slider.absY + (slider.absH - trackHeight) * 0.5f;
     
     // Проверка наведения
     bool hovered = isMouseOverSlider(slider, mouseX, mouseY) || slider.isDragging;
     
     // Рисуем дорожку слайдера
-    drawRectangle(slider.absX, trackY, slider.absW, trackHeight, 
+    drawRectangle(trackX, trackY, trackWidth, trackHeight, 
                   sliderTrackTexture, screenW, screenH);
     
     // Вычисляем позицию ползунка
     float normalizedValue = (*slider.value - slider.minValue) / (slider.maxValue - slider.minValue);
     normalizedValue = glm::clamp(normalizedValue, 0.0f, 1.0f);
-    float thumbX = slider.absX + normalizedValue * (slider.absW - thumbSize);
-    float thumbY = slider.absY + (slider.absH - thumbSize) / 2;
+    float thumbX = trackX + normalizedValue * (trackWidth - thumbWidth);
+    float thumbY = trackY + (trackHeight - thumbHeight) * 0.5f;
     
     // Рисуем ползунок
     unsigned int thumbTex = sliderThumbTexture;
     if (menuButtonHighlightTexture && hovered) {
         // Используем highlight текстуру при наведении
-        drawRectangle(thumbX - 2, thumbY - 2, thumbSize + 4, thumbSize + 4, 
+        drawRectangle(thumbX - 1, thumbY, thumbWidth + 2, thumbHeight, 
                      menuButtonHighlightTexture, screenW, screenH);
     }
-    drawRectangle(thumbX, thumbY, thumbSize, thumbSize, thumbTex, screenW, screenH);
+    drawRectangle(thumbX, thumbY, thumbWidth, thumbHeight, thumbTex, screenW, screenH);
     
     // Формируем текст слайдера
     std::string displayText = std::string(slider.label) + ": " + 
@@ -1759,14 +1761,12 @@ void drawSlider(const Slider& slider, int screenW, int screenH) {
         glm::vec4(1.0f, 0.93f, 0.62f, 1.0f) :  // Желтоватый при наведении
         glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);     // Белый обычный
     
-    float scale = fitMinecraftTextScale(displayText, 
-                                       slider.absW * 0.8f, 
-                                       slider.absH * 0.4f);
+    float scale = fitMinecraftTextScale(displayText, trackWidth * 0.92f, trackHeight * 0.8f);
     
     drawMinecraftTextCentered(
         displayText,
-        slider.absX + slider.absW * 0.5f,
-        slider.absY - slider.absH * 0.15f,  // Текст над слайдером
+        trackX + trackWidth * 0.5f,
+        trackY + trackHeight * 0.52f,
         scale,
         screenW,
         screenH,
@@ -1776,7 +1776,14 @@ void drawSlider(const Slider& slider, int screenW, int screenH) {
 
 // Обработка кликов по слайдеру
 bool handleSliderClick(Slider& slider, double mouseX, double mouseY) {
-    if (!isMouseOverSlider(slider, mouseX, mouseY)) {
+    const float trackWidth = 200.0f;
+    const float trackHeight = 20.0f;
+    const float thumbWidth = 8.0f;
+    const float trackX = slider.absX + (slider.absW - trackWidth) * 0.5f;
+    const float trackY = slider.absY + (slider.absH - trackHeight) * 0.5f;
+    const bool insideTrack = mouseX >= trackX && mouseX <= trackX + trackWidth &&
+                             mouseY >= trackY && mouseY <= trackY + trackHeight;
+    if (!insideTrack) {
         slider.isDragging = false;
         return false;
     }
@@ -1784,9 +1791,8 @@ bool handleSliderClick(Slider& slider, double mouseX, double mouseY) {
     slider.isDragging = true;
     
     // Вычисляем новое значение на основе позиции мыши
-    float thumbSize = slider.absH * 0.8f;
-    float relativeX = (float)(mouseX - slider.absX - thumbSize / 2) / 
-                     (slider.absW - thumbSize);
+    float relativeX = (float)(mouseX - trackX - thumbWidth * 0.5f) /
+                     (trackWidth - thumbWidth);
     relativeX = glm::clamp(relativeX, 0.0f, 1.0f);
     
     float rawValue = slider.minValue + relativeX * (slider.maxValue - slider.minValue);
@@ -1803,10 +1809,11 @@ bool handleSliderClick(Slider& slider, double mouseX, double mouseY) {
 // Обработка перетаскивания слайдера
 void handleSliderDrag(Slider& slider, double mouseX, double mouseY) {
     if (!slider.isDragging) return;
-    
-    float thumbSize = slider.absH * 0.8f;
-    float relativeX = (float)(mouseX - slider.absX - thumbSize / 2) / 
-                     (slider.absW - thumbSize);
+    const float trackWidth = 200.0f;
+    const float thumbWidth = 8.0f;
+    const float trackX = slider.absX + (slider.absW - trackWidth) * 0.5f;
+    float relativeX = (float)(mouseX - trackX - thumbWidth * 0.5f) / 
+                     (trackWidth - thumbWidth);
     relativeX = glm::clamp(relativeX, 0.0f, 1.0f);
     
     float rawValue = slider.minValue + relativeX * (slider.maxValue - slider.minValue);
