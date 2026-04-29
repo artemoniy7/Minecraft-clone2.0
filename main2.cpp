@@ -1692,10 +1692,13 @@ void main() {
 unsigned int sliderTrackTexture = 0;
 unsigned int sliderThumbTexture = 0;
 std::vector<Slider> optionsSliders;
-constexpr float OPTIONS_SLIDER_TRACK_W = 320.0f;
-constexpr float OPTIONS_SLIDER_TRACK_H = 28.0f;
-constexpr float OPTIONS_SLIDER_THUMB_W = 12.0f;
-constexpr float OPTIONS_SLIDER_THUMB_H = 28.0f;
+constexpr float OPTIONS_UI_SCALE = 1.3f;
+constexpr float OPTIONS_BUTTON_W = 430.0f * OPTIONS_UI_SCALE;
+constexpr float OPTIONS_BUTTON_H = 58.0f * OPTIONS_UI_SCALE;
+constexpr float OPTIONS_SLIDER_TRACK_W = OPTIONS_BUTTON_W;
+constexpr float OPTIONS_SLIDER_TRACK_H = OPTIONS_BUTTON_H;
+constexpr float OPTIONS_SLIDER_THUMB_W = 16.0f * OPTIONS_UI_SCALE;
+constexpr float OPTIONS_SLIDER_THUMB_H = OPTIONS_BUTTON_H;
 
 // Загрузка текстур слайдера
 void loadSliderTextures() {
@@ -4190,7 +4193,7 @@ void renderMainMenuOptions(int screenW, int screenH) {
     // Тот же фон, что и в главном меню
     if (menuBackgroundLightTexture || menuBackgroundTexture)
         drawTiledBackground(menuBackgroundLightTexture != 0 ? menuBackgroundLightTexture : menuBackgroundTexture, screenW, screenH);
-    drawMinecraftTextCentered("Options", screenW * 0.5f, screenH * 0.08f, 2.6f, screenW, screenH, glm::vec4(1.0f));
+    drawMinecraftTextCentered("Options", screenW * 0.5f, screenH * 0.08f, 3.12f, screenW, screenH, glm::vec4(1.0f));
     for (const auto& slider : optionsSliders) {
         drawSlider(slider, screenW, screenH);
     }
@@ -4200,7 +4203,7 @@ void renderMainMenuOptions(int screenW, int screenH) {
         unsigned int tex = (menuButtonHighlightTexture && hovered) ? menuButtonHighlightTexture : menuButtonTexture;
         drawRectangle(btn.absX, btn.absY, btn.absW, btn.absH, tex, screenW, screenH);
         drawMinecraftTextCentered(btn.label, btn.absX + btn.absW * 0.5f, btn.absY + btn.absH * 0.52f,
-            fitMinecraftButtonTextScale(btn.label, btn.absW, btn.absH), screenW, screenH, getMenuTextColor(hovered));
+            fitMinecraftButtonTextScale(btn.label, btn.absW, btn.absH) * 1.2f, screenW, screenH, getMenuTextColor(hovered));
     };
     drawOptButton(optionsDifficultyButton);
     for (int i = 0; i < OPTIONS_ROW1_BUTTON_COUNT; ++i) drawOptButton(optionsRow1Buttons[i]);
@@ -4396,20 +4399,21 @@ void updateMainMenuOptions(GLFWwindow* window) {
 }
 
 void updateOptionsLayout(int screenW, int screenH) {
-    const float topY = screenH * 0.19f;
-    const float buttonW = 430.0f;
-    const float buttonH = 58.0f;
-    const float colGap = 44.0f;
-    const float rowGap = 34.0f;
+    const float yOffset = screenH * 0.10f;
+    const float topY = screenH * 0.15f;
+    const float buttonW = OPTIONS_BUTTON_W;
+    const float buttonH = OPTIONS_BUTTON_H;
+    const float colGap = 44.0f * OPTIONS_UI_SCALE;
+    const float rowGap = 34.0f * OPTIONS_UI_SCALE;
     const float leftX = screenW * 0.5f - colGap * 0.5f - buttonW;
     const float rightX = screenW * 0.5f + colGap * 0.5f;
 
     // FOV в левом верхнем блоке
     if (!optionsSliders.empty()) {
         optionsSliders[0].relX = (leftX + buttonW * 0.5f) / screenW;
-        optionsSliders[0].relY = topY / screenH;
+        optionsSliders[0].relY = (topY + yOffset) / screenH;
         optionsSliders[0].relW = buttonW / screenW;
-        optionsSliders[0].relH = 0.08f;
+        optionsSliders[0].relH = buttonH / screenH;
         updateSliderPosition(optionsSliders[0], screenW, screenH);
     }
 
@@ -4418,7 +4422,7 @@ void updateOptionsLayout(int screenW, int screenH) {
     optionsDifficultyButton.absW = buttonW;
     optionsDifficultyButton.absH = buttonH;
     optionsDifficultyButton.absX = rightX;
-    optionsDifficultyButton.absY = topY - buttonH * 0.5f;
+    optionsDifficultyButton.absY = topY - buttonH * 0.5f + yOffset;
 
     // Структура как на скриншоте
     // Одиночная кнопка справа под Difficulty
@@ -4448,10 +4452,10 @@ void updateOptionsLayout(int screenW, int screenH) {
     }
 
     optionsDoneButton.label = tr("Done", "Готово", "完了");
-    optionsDoneButton.absW = 560.0f;
-    optionsDoneButton.absH = 50.0f;
+    optionsDoneButton.absW = 560.0f * OPTIONS_UI_SCALE;
+    optionsDoneButton.absH = 50.0f * OPTIONS_UI_SCALE;
     optionsDoneButton.absX = (screenW - optionsDoneButton.absW) * 0.5f;
-    optionsDoneButton.absY = optionsRow1Buttons[3].absY + buttonH + 46.0f;
+    optionsDoneButton.absY = optionsRow1Buttons[3].absY + buttonH + 46.0f * OPTIONS_UI_SCALE;
 }
 
 void handleWorldSelectMenuClick(GLFWwindow* window, int button) {
