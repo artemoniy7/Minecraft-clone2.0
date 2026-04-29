@@ -131,6 +131,7 @@ bool isWorldButtonEnabled(int buttonIndex);
 void updateMainMenuOptions(GLFWwindow* window);
 void renderMainMenuOptions(int screenW, int screenH);
 void handleMainMenuOptionsClick(GLFWwindow* window, int button);
+void updateOptionsLayout(int screenW, int screenH);
 float calculateFallDamage(float distance);
 void applyDamage(int damage);
 bool isPlayerInWater();
@@ -1556,6 +1557,8 @@ int currentHotbarSlot = 0;
 constexpr int MAIN_MENU_BUTTON_COUNT = 6;
 constexpr int WORLD_SELECT_BUTTON_COUNT = 6;
 constexpr int LANGUAGE_BUTTON_COUNT = 1;
+constexpr int OPTIONS_ROW1_BUTTON_COUNT = 4;
+constexpr int OPTIONS_ROW2_BUTTON_COUNT = 5;
 struct Button {
     float relX, relY, relW, relH;
     float absX, absY, absW, absH;
@@ -1601,6 +1604,10 @@ void refreshLanguageMenuEntries();
 void applyLanguageSelection(int index);
 
 Button languageButtons[LANGUAGE_BUTTON_COUNT];
+Button optionsRow1Buttons[OPTIONS_ROW1_BUTTON_COUNT];
+Button optionsRow2Buttons[OPTIONS_ROW2_BUTTON_COUNT];
+Button optionsDifficultyButton;
+Button optionsDoneButton;
 void initLanguageMenu() {
     languageButtons[0] = {0.5f, 0.9f, 0.2025f, 0.0486f, 0,0,0,0, false, "Done"};
     updateUILabels();
@@ -4183,36 +4190,22 @@ void renderMainMenuOptions(int screenW, int screenH) {
     // Тот же фон, что и в главном меню
     if (menuBackgroundLightTexture || menuBackgroundTexture)
         drawTiledBackground(menuBackgroundLightTexture != 0 ? menuBackgroundLightTexture : menuBackgroundTexture, screenW, screenH);
-    drawMinecraftTextCentered("Options", screenW * 0.5f, screenH * 0.14f, 2.6f, screenW, screenH, glm::vec4(1.0f));
+    drawMinecraftTextCentered("Options", screenW * 0.5f, screenH * 0.08f, 2.6f, screenW, screenH, glm::vec4(1.0f));
     for (const auto& slider : optionsSliders) {
         drawSlider(slider, screenW, screenH);
     }
 
-    // Кнопка "Back"
-    float backBtnW = 200.0f, backBtnH = 50.0f;
-    float backBtnX = (screenW - backBtnW) * 0.5f;
-    float backBtnY = screenH - 100.0f;
-    
-    // Проверка наведения
-    bool backHovered = (mouseX >= backBtnX && mouseX <= backBtnX + backBtnW &&
-                        mouseY >= backBtnY && mouseY <= backBtnY + backBtnH);
-    
-    unsigned int tex = menuButtonTexture;
-    if (menuButtonHighlightTexture && backHovered) {
-        tex = menuButtonHighlightTexture;
-    }
-    
-    drawRectangle(backBtnX, backBtnY, backBtnW, backBtnH, tex, screenW, screenH);
-    
-    drawMinecraftTextCentered(
-        tr("Back", "Назад", "戻る"),
-        backBtnX + backBtnW * 0.5f,
-        backBtnY + backBtnH * 0.52f,
-        fitMinecraftButtonTextScale("Back", backBtnW, backBtnH),
-        screenW,
-        screenH,
-        getMenuTextColor(backHovered)
-    );
+    auto drawOptButton = [&](const Button& btn) {
+        const bool hovered = isMouseOverButton(btn, mouseX, mouseY);
+        unsigned int tex = (menuButtonHighlightTexture && hovered) ? menuButtonHighlightTexture : menuButtonTexture;
+        drawRectangle(btn.absX, btn.absY, btn.absW, btn.absH, tex, screenW, screenH);
+        drawMinecraftTextCentered(btn.label, btn.absX + btn.absW * 0.5f, btn.absY + btn.absH * 0.52f,
+            fitMinecraftButtonTextScale(btn.label, btn.absW, btn.absH), screenW, screenH, getMenuTextColor(hovered));
+    };
+    drawOptButton(optionsDifficultyButton);
+    for (int i = 0; i < OPTIONS_ROW1_BUTTON_COUNT; ++i) drawOptButton(optionsRow1Buttons[i]);
+    for (int i = 0; i < OPTIONS_ROW2_BUTTON_COUNT; ++i) drawOptButton(optionsRow2Buttons[i]);
+    drawOptButton(optionsDoneButton);
 
     glDisable(GL_BLEND);
     glEnable(GL_DEPTH_TEST);
@@ -4390,7 +4383,7 @@ void updateMainMenuOptions(GLFWwindow* window) {
     static bool escWasPressed = false;
     int w = 0, h = 0;
     glfwGetWindowSize(window, &w, &h);
-    updateSliderPositions(optionsSliders, w, h);
+    updateOptionsLayout(w, h);
     
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
         if (!escWasPressed) {
@@ -4400,6 +4393,63 @@ void updateMainMenuOptions(GLFWwindow* window) {
     } else {
         escWasPressed = false;
     }
+}
+
+void updateOptionsLayout(int screenW, int screenH) {
+    const float topY = screenH * 0.16f;
+    const float row1Y = screenH * 0.33f;
+    const float row2Y = screenH * 0.44f;
+    const float buttonH = 44.0f;
+    const float gap = 12.0f;
+
+    // FOV slider в верхней части слева
+    if (!optionsSliders.empty()) {
+        optionsSliders[0].relX = 0.36f;
+        optionsSliders[0].relY = topY / screenH;
+        optionsSliders[0].relW = 0.32f;
+        optionsSliders[0].relH = 0.08f;
+        updateSliderPosition(optionsSliders[0], screenW, screenH);
+    }
+
+    // Difficulty справа от FOV
+    optionsDifficultyButton.label = tr("Difficulty: Normal", "Сложность: Нормально", "難易度: ノーマル");
+    optionsDifficultyButton.absW = 320.0f;
+    optionsDifficultyButton.absH = buttonH;
+    optionsDifficultyButton.absX = screenW * 0.52f;
+    optionsDifficultyButton.absY = topY - buttonH * 0.5f;
+
+    const char* row1Labels[OPTIONS_ROW1_BUTTON_COUNT] = {
+        "Super Secret Settings...", "Music & Sounds...", "Video Settings...", "Language..."
+    };
+    const char* row2Labels[OPTIONS_ROW2_BUTTON_COUNT] = {
+        "Resource Packs...", "Broadcast Settings...", "Controls...", "Multiplayer Settings...", "Snooper Settings..."
+    };
+
+    const float row1ButtonW = (screenW * 0.82f - gap * (OPTIONS_ROW1_BUTTON_COUNT - 1)) / OPTIONS_ROW1_BUTTON_COUNT;
+    const float row2ButtonW = (screenW * 0.82f - gap * (OPTIONS_ROW2_BUTTON_COUNT - 1)) / OPTIONS_ROW2_BUTTON_COUNT;
+    float row1StartX = (screenW - (row1ButtonW * OPTIONS_ROW1_BUTTON_COUNT + gap * (OPTIONS_ROW1_BUTTON_COUNT - 1))) * 0.5f;
+    float row2StartX = (screenW - (row2ButtonW * OPTIONS_ROW2_BUTTON_COUNT + gap * (OPTIONS_ROW2_BUTTON_COUNT - 1))) * 0.5f;
+
+    for (int i = 0; i < OPTIONS_ROW1_BUTTON_COUNT; ++i) {
+        optionsRow1Buttons[i].label = row1Labels[i];
+        optionsRow1Buttons[i].absX = row1StartX + i * (row1ButtonW + gap);
+        optionsRow1Buttons[i].absY = row1Y;
+        optionsRow1Buttons[i].absW = row1ButtonW;
+        optionsRow1Buttons[i].absH = buttonH;
+    }
+    for (int i = 0; i < OPTIONS_ROW2_BUTTON_COUNT; ++i) {
+        optionsRow2Buttons[i].label = row2Labels[i];
+        optionsRow2Buttons[i].absX = row2StartX + i * (row2ButtonW + gap);
+        optionsRow2Buttons[i].absY = row2Y;
+        optionsRow2Buttons[i].absW = row2ButtonW;
+        optionsRow2Buttons[i].absH = buttonH;
+    }
+
+    optionsDoneButton.label = tr("Done", "Готово", "完了");
+    optionsDoneButton.absW = 220.0f;
+    optionsDoneButton.absH = 50.0f;
+    optionsDoneButton.absX = (screenW - optionsDoneButton.absW) * 0.5f;
+    optionsDoneButton.absY = screenH - 100.0f;
 }
 
 void handleWorldSelectMenuClick(GLFWwindow* window, int button) {
@@ -4776,22 +4826,20 @@ void updatePauseMenu(GLFWwindow* window) {
 
 void handleMainMenuOptionsClick(GLFWwindow* window, int button) {
     if (button != GLFW_MOUSE_BUTTON_LEFT) return;
-    
+
     double mx, my;
     glfwGetCursorPos(window, &mx, &my);
-    
-    // Временная кнопка Back
-    int screenW, screenH;
-    glfwGetWindowSize(window, &screenW, &screenH);
-    
-    float backBtnW = 200.0f, backBtnH = 50.0f;
-    float backBtnX = (screenW - backBtnW) * 0.5f;
-    float backBtnY = screenH - 100.0f;
-    
-    if (mx >= backBtnX && mx <= backBtnX + backBtnW &&
-        my >= backBtnY && my <= backBtnY + backBtnH) {
+
+    if (isMouseOverButton(optionsDoneButton, mx, my)) {
         soundManager.playUISound("ui");
         currentState = GameState::MAIN_MENU;
+        return;
+    }
+
+    if (isMouseOverButton(optionsRow1Buttons[3], mx, my)) {
+        soundManager.playUISound("ui");
+        refreshLanguageMenuEntries();
+        currentState = GameState::LANGUAGE_MENU;
     }
 }
 
