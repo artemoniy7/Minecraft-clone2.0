@@ -1678,6 +1678,7 @@ void main() {
 // Текстуры для слайдера
 unsigned int sliderTrackTexture = 0;
 unsigned int sliderThumbTexture = 0;
+std::vector<Slider> optionsSliders;
 
 // Загрузка текстур слайдера
 void loadSliderTextures() {
@@ -1841,23 +1842,6 @@ void initFOVSlider(std::vector<Slider>& sliders) {
     fovSlider.decimalPlaces = 0;  // Целое число, без десятичных знаков
     
     sliders.push_back(fovSlider);
-}
-
-// Или если хотите отдельную переменную для слайдера FOV:
-Slider fovSlider;  // Глобальная переменная для слайдера FOV
-
-void initFOVSlider() {
-    fovSlider.relX = 0.5f - 0.05f;  // 5% левее от середины (0.45 или 45% ширины)
-    fovSlider.relY = 0.1f;           // 10% от верха
-    fovSlider.relW = 0.4f;          // 40% ширины экрана
-    fovSlider.relH = 0.08f;         // 8% высоты экрана
-    fovSlider.label = tr("FOV", "FOV", "FOV");
-    fovSlider.minValue = 30.0f;
-    fovSlider.maxValue = 110.0f;
-    fovSlider.value = &currentFOV;
-    fovSlider.step = 1.0f;
-    fovSlider.isDragging = false;
-    fovSlider.decimalPlaces = 0;    // Без десятичных знаков
 }
 
 void initUI() {
@@ -4180,7 +4164,12 @@ void renderMainMenuOptions(int screenW, int screenH) {
     // Тот же фон, что и в главном меню
     if (menuBackgroundLightTexture || menuBackgroundTexture)
         drawTiledBackground(menuBackgroundLightTexture != 0 ? menuBackgroundLightTexture : menuBackgroundTexture, screenW, screenH);
-    // Кнопка "Back" - ВРЕМЕННО, пока нет других кнопок
+    drawMinecraftTextCentered("Options", screenW * 0.5f, screenH * 0.14f, 2.6f, screenW, screenH, glm::vec4(1.0f));
+    for (const auto& slider : optionsSliders) {
+        drawSlider(slider, screenW, screenH);
+    }
+
+    // Кнопка "Back"
     float backBtnW = 200.0f, backBtnH = 50.0f;
     float backBtnX = (screenW - backBtnW) * 0.5f;
     float backBtnY = screenH - 100.0f;
@@ -4380,6 +4369,9 @@ void handleLanguageMenuClick(GLFWwindow* window, int button) {
 
 void updateMainMenuOptions(GLFWwindow* window) {
     static bool escWasPressed = false;
+    int w = 0, h = 0;
+    glfwGetWindowSize(window, &w, &h);
+    updateSliderPositions(optionsSliders, w, h);
     
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
         if (!escWasPressed) {
@@ -4887,22 +4879,34 @@ void handlePauseMenuClick(GLFWwindow* window, int button) {
 // Коллбэки GLFW
 // ----------------------------------------------------------------------
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
-    if (action != GLFW_PRESS) return;
-
     if (currentState == GameState::MAIN_MENU) {
+        if (action != GLFW_PRESS) return;
         handleMainMenuClick(window, button);
     } else if (currentState == GameState::WORLD_SELECT_MENU) {
+        if (action != GLFW_PRESS) return;
         handleWorldSelectMenuClick(window, button);
     }else if (currentState == GameState::MAIN_MENU_OPTIONS) {
-        handleMainMenuOptionsClick(window, button);
+        if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
+            double mx, my;
+            glfwGetCursorPos(window, &mx, &my);
+            for (auto& slider : optionsSliders) {
+                if (handleSliderClick(slider, mx, my)) return;
+            }
+        } else if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE) {
+            for (auto& slider : optionsSliders) releaseSlider(slider);
+        }
+        if (action == GLFW_PRESS) handleMainMenuOptionsClick(window, button);
     } else if (currentState == GameState::PAUSE_MENU) {
+        if (action != GLFW_PRESS) return;
         handlePauseMenuClick(window, button);
     }else if (currentState == GameState::CREATIVE_INVENTORY) {
         // Заглушка
         return;
     } else if (currentState == GameState::LANGUAGE_MENU) {
+        if (action != GLFW_PRESS) return;
         handleLanguageMenuClick(window, button);
     } else if (currentState == GameState::IN_GAME) {
+        if (action != GLFW_PRESS) return;
         if (!movementEnabled) return;
         glm::vec3 rayDir = cameraFront;
         int hx, hy, hz, face;
@@ -4945,6 +4949,11 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
 void cursor_pos_callback(GLFWwindow* window, double x, double y) {
     mouseX = x;
     mouseY = y;
+    if (currentState == GameState::MAIN_MENU_OPTIONS) {
+        for (auto& slider : optionsSliders) {
+            handleSliderDrag(slider, x, y);
+        }
+    }
     if (currentState != GameState::IN_GAME || gamePaused) return;
     if (firstMouse) {
         lastX = x;
@@ -5083,6 +5092,8 @@ int main() {
 
     if (!loadBlockConfig("blocks.json")) return -1;
     initUI(); loadMenuTextures(); loadHUDTextures(); initLanguageMenu();
+    loadSliderTextures();
+    initFOVSlider(optionsSliders);
     if (fs::exists("sounds/hurtflesh1.ogg")) {
         soundManager.loadPlayerSound("hurt", "sounds/hurtflesh1.ogg");
     }
