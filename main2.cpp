@@ -4396,60 +4396,62 @@ void updateMainMenuOptions(GLFWwindow* window) {
 }
 
 void updateOptionsLayout(int screenW, int screenH) {
-    const float topY = screenH * 0.16f;
-    const float row1Y = screenH * 0.33f;
-    const float row2Y = screenH * 0.44f;
-    const float buttonH = 44.0f;
-    const float gap = 12.0f;
+    const float topY = screenH * 0.19f;
+    const float buttonW = 430.0f;
+    const float buttonH = 58.0f;
+    const float colGap = 44.0f;
+    const float rowGap = 34.0f;
+    const float leftX = screenW * 0.5f - colGap * 0.5f - buttonW;
+    const float rightX = screenW * 0.5f + colGap * 0.5f;
 
-    // FOV slider в верхней части слева
+    // FOV в левом верхнем блоке
     if (!optionsSliders.empty()) {
-        optionsSliders[0].relX = 0.36f;
+        optionsSliders[0].relX = (leftX + buttonW * 0.5f) / screenW;
         optionsSliders[0].relY = topY / screenH;
-        optionsSliders[0].relW = 0.32f;
+        optionsSliders[0].relW = buttonW / screenW;
         optionsSliders[0].relH = 0.08f;
         updateSliderPosition(optionsSliders[0], screenW, screenH);
     }
 
     // Difficulty справа от FOV
-    optionsDifficultyButton.label = tr("Difficulty: Normal", "Сложность: Нормально", "難易度: ノーマル");
-    optionsDifficultyButton.absW = 320.0f;
+    optionsDifficultyButton.label = tr("Difficulty: Hard", "Сложность: Сложно", "難易度: ハード");
+    optionsDifficultyButton.absW = buttonW;
     optionsDifficultyButton.absH = buttonH;
-    optionsDifficultyButton.absX = screenW * 0.52f;
+    optionsDifficultyButton.absX = rightX;
     optionsDifficultyButton.absY = topY - buttonH * 0.5f;
 
-    const char* row1Labels[OPTIONS_ROW1_BUTTON_COUNT] = {
-        "Super Secret Settings...", "Music & Sounds...", "Video Settings...", "Language..."
-    };
-    const char* row2Labels[OPTIONS_ROW2_BUTTON_COUNT] = {
-        "Resource Packs...", "Broadcast Settings...", "Controls...", "Multiplayer Settings...", "Snooper Settings..."
-    };
+    // Структура как на скриншоте
+    // Одиночная кнопка справа под Difficulty
+    optionsRow2Buttons[4].label = "Super Secret Settings...";
+    optionsRow2Buttons[4].absX = rightX;
+    optionsRow2Buttons[4].absY = optionsDifficultyButton.absY + buttonH + rowGap;
+    optionsRow2Buttons[4].absW = buttonW;
+    optionsRow2Buttons[4].absH = buttonH;
 
-    const float row1ButtonW = (screenW * 0.82f - gap * (OPTIONS_ROW1_BUTTON_COUNT - 1)) / OPTIONS_ROW1_BUTTON_COUNT;
-    const float row2ButtonW = (screenW * 0.82f - gap * (OPTIONS_ROW2_BUTTON_COUNT - 1)) / OPTIONS_ROW2_BUTTON_COUNT;
-    float row1StartX = (screenW - (row1ButtonW * OPTIONS_ROW1_BUTTON_COUNT + gap * (OPTIONS_ROW1_BUTTON_COUNT - 1))) * 0.5f;
-    float row2StartX = (screenW - (row2ButtonW * OPTIONS_ROW2_BUTTON_COUNT + gap * (OPTIONS_ROW2_BUTTON_COUNT - 1))) * 0.5f;
-
-    for (int i = 0; i < OPTIONS_ROW1_BUTTON_COUNT; ++i) {
-        optionsRow1Buttons[i].label = row1Labels[i];
-        optionsRow1Buttons[i].absX = row1StartX + i * (row1ButtonW + gap);
-        optionsRow1Buttons[i].absY = row1Y;
-        optionsRow1Buttons[i].absW = row1ButtonW;
+    // Две колонки ниже
+    const float startRowsY = optionsRow2Buttons[4].absY + buttonH + rowGap;
+    const char* leftLabels[4] = { "Music & Sounds...", "Video Settings...", "Language...", "Resource Packs..." };
+    const char* rightLabels[4] = { "Broadcast Settings...", "Controls...", "Multiplayer Settings...", "Snooper Settings..." };
+    for (int i = 0; i < 4; ++i) {
+        optionsRow1Buttons[i].absW = buttonW;
         optionsRow1Buttons[i].absH = buttonH;
-    }
-    for (int i = 0; i < OPTIONS_ROW2_BUTTON_COUNT; ++i) {
-        optionsRow2Buttons[i].label = row2Labels[i];
-        optionsRow2Buttons[i].absX = row2StartX + i * (row2ButtonW + gap);
-        optionsRow2Buttons[i].absY = row2Y;
-        optionsRow2Buttons[i].absW = row2ButtonW;
+        optionsRow2Buttons[i].absW = buttonW;
         optionsRow2Buttons[i].absH = buttonH;
+
+        optionsRow1Buttons[i].absX = leftX;
+        optionsRow1Buttons[i].absY = startRowsY + i * (buttonH + rowGap * 0.55f);
+        optionsRow1Buttons[i].label = leftLabels[i];
+
+        optionsRow2Buttons[i].absX = rightX;
+        optionsRow2Buttons[i].absY = startRowsY + i * (buttonH + rowGap * 0.55f);
+        optionsRow2Buttons[i].label = rightLabels[i];
     }
 
     optionsDoneButton.label = tr("Done", "Готово", "完了");
-    optionsDoneButton.absW = 220.0f;
+    optionsDoneButton.absW = 560.0f;
     optionsDoneButton.absH = 50.0f;
     optionsDoneButton.absX = (screenW - optionsDoneButton.absW) * 0.5f;
-    optionsDoneButton.absY = screenH - 100.0f;
+    optionsDoneButton.absY = optionsRow1Buttons[3].absY + buttonH + 46.0f;
 }
 
 void handleWorldSelectMenuClick(GLFWwindow* window, int button) {
