@@ -966,6 +966,7 @@ void propagateBlockLightGlobal(std::queue<LightNode>& queue) {
         queue.pop();
 
         if (node.light <= 1) continue;
+        uint8_t propagatedLight = static_cast<uint8_t>(node.light - 1);
 
         for (int i = 0; i < 6; ++i) {
             int nx = node.x + dirs[i][0];
@@ -978,7 +979,7 @@ void propagateBlockLightGlobal(std::queue<LightNode>& queue) {
             if (isOpaque(blockId)) continue;
 
             uint8_t current = getBlockLightAt(nx, ny, nz);
-            uint8_t newLight = computeSphericalBlockLight(nx, ny, nz, node.sourceX, node.sourceY, node.sourceZ, node.radius);
+            uint8_t newLight = propagatedLight;
 
             if (newLight > current && newLight > 0) {
                 setBlockLightAt(nx, ny, nz, newLight);
@@ -992,8 +993,9 @@ void propagateBlockLightGlobal(std::queue<LightNode>& queue) {
 void addBlockLightGlobal(int x, int y, int z, uint8_t light) {
     if (light == 0) return;
     std::queue<LightNode> queue;
-    setBlockLightAt(x, y, z, static_cast<uint8_t>(MAX_LIGHT));
-    queue.push({x, y, z, x, y, z, light, static_cast<uint8_t>(MAX_LIGHT)});
+    uint8_t sourceLight = std::min<uint8_t>(light, static_cast<uint8_t>(MAX_LIGHT));
+    setBlockLightAt(x, y, z, sourceLight);
+    queue.push({x, y, z, x, y, z, light, sourceLight});
     propagateBlockLightGlobal(queue);
 }
 
@@ -1012,6 +1014,9 @@ void propagateBlockLightInRegion(std::queue<LightNode>& queue, const LightRegion
         LightNode node = queue.front();
         queue.pop();
 
+        if (node.light <= 1) continue;
+        uint8_t propagatedLight = static_cast<uint8_t>(node.light - 1);
+
         for (int i = 0; i < 6; ++i) {
             int nx = node.x + dirs[i][0];
             int ny = node.y + dirs[i][1];
@@ -1024,7 +1029,7 @@ void propagateBlockLightInRegion(std::queue<LightNode>& queue, const LightRegion
             if (isOpaque(blockId)) continue;
 
             uint8_t current = getBlockLightAt(nx, ny, nz);
-            uint8_t newLight = computeSphericalBlockLight(nx, ny, nz, node.sourceX, node.sourceY, node.sourceZ, node.radius);
+            uint8_t newLight = propagatedLight;
 
             if (newLight > current && newLight > 0) {
                 setBlockLightAt(nx, ny, nz, newLight);
@@ -1040,12 +1045,14 @@ void addBlockLightInRegion(int x, int y, int z, uint8_t radius, const LightRegio
     std::queue<LightNode> queue;
     if (isInsideLightRegion(region, x, y, z)) {
         uint8_t current = getBlockLightAt(x, y, z);
-        if (MAX_LIGHT > current) {
-            setBlockLightAt(x, y, z, static_cast<uint8_t>(MAX_LIGHT));
+        uint8_t sourceLight = std::min<uint8_t>(radius, static_cast<uint8_t>(MAX_LIGHT));
+        if (sourceLight > current) {
+            setBlockLightAt(x, y, z, sourceLight);
         }
     }
 
-    queue.push({x, y, z, x, y, z, radius, static_cast<uint8_t>(MAX_LIGHT)});
+    uint8_t sourceLight = std::min<uint8_t>(radius, static_cast<uint8_t>(MAX_LIGHT));
+    queue.push({x, y, z, x, y, z, radius, sourceLight});
     propagateBlockLightInRegion(queue, region);
 }
 
