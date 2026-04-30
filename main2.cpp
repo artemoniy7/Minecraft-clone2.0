@@ -1554,7 +1554,7 @@ unsigned int uiVAO, uiVBO, uiEBO;
 unsigned int fontVAO = 0, fontVBO = 0, fontEBO = 0;
 unsigned int menuBackgroundTexture = 0, menuBackgroundLightTexture = 0, menuBackgroundDarkTexture = 0;
 unsigned int menuButtonTexture = 0, menuButtonHighlightTexture = 0, menuPhotoTexture = 0; unsigned int menuButtonDisabledTexture = 0;
-unsigned int hotbarSlotTexture = 0, heartFullTexture = 0, heartHalfTexture = 0, hotbarSelTexture = 0, heartContTexture = 0;
+unsigned int hotbarTexture = 0, heartFullTexture = 0, heartHalfTexture = 0, hotbarSelTexture = 0, heartContTexture = 0;
 unsigned int minecraftAsciiTexture = 0;
 unsigned int languageButtonTexture = 0;
 unsigned int inventoryTexture = 0;
@@ -2345,7 +2345,7 @@ void loadMenuTextures() {
 }
 
 void loadHUDTextures() {
-    hotbarSlotTexture = loadUITexture("textures/hotbar_slot.png");
+    hotbarTexture    = loadUITexture("textures/Hotbar.png");
     heartFullTexture  = loadUITexture("textures/heart_full.png");
     heartHalfTexture  = loadUITexture("textures/heart_half.png");
     hotbarSelTexture  = loadUITexture("textures/hotbar_sel.png");
@@ -2609,7 +2609,7 @@ void renderInventory(int screenW, int screenH) {
 
 void drawHUD(int screenW, int screenH, float currentTime)
 {
-    if (!hotbarSlotTexture ||
+    if (!hotbarTexture ||
         !heartFullTexture ||
         !heartHalfTexture ||
         !heartContTexture ||
@@ -2661,20 +2661,15 @@ void drawHUD(int screenW, int screenH, float currentTime)
 
     glUseProgram(uiShaderProgram);
 
-    for (int i = 0; i < HOTBAR_SLOTS; i++)
-    {
-        int x = startX + i * (SLOT_SIZE + SLOT_SPACING);
-
-        drawRectangle(
-            x,
-            startY,
-            SLOT_SIZE,
-            SLOT_SIZE,
-            hotbarSlotTexture,
-            screenW,
-            screenH
-        );
-    }
+    drawRectangle(
+        startX,
+        startY,
+        totalWidth,
+        SLOT_SIZE,
+        hotbarTexture,
+        screenW,
+        screenH
+    );
 
     // =========================================================
     // DRAW SELECTED SLOT
@@ -3562,7 +3557,7 @@ void saveAllChunks() {
     std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 }
 
-unsigned int loadTextureStrip(const char* path, bool forceAlpha = false) {
+unsigned int loadTextureStrip(const char* path, bool forceAlpha) {
     unsigned int tex; glGenTextures(1,&tex); glBindTexture(GL_TEXTURE_2D,tex);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
@@ -5403,7 +5398,7 @@ int main() {
     glDeleteTextures(1, &menuButtonHighlightTexture);
     glDeleteTextures(1, &menuPhotoTexture);
     glDeleteTextures(1, &menuButtonDisabledTexture);
-    glDeleteTextures(1, &hotbarSlotTexture);
+    glDeleteTextures(1, &hotbarTexture);
     glDeleteTextures(1, &heartFullTexture);
     glDeleteTextures(1, &heartHalfTexture);
     glDeleteTextures(1, &hotbarSelTexture);
