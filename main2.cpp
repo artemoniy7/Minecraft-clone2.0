@@ -2650,6 +2650,7 @@ void renderInventory(int screenW, int screenH) {
     const int listStartY = posY + static_cast<int>(17.0f * scaleY);
     const int listCols = 9;
     const int listRowsVisible = 5;
+    const int slotStepX = std::max(1, static_cast<int>(slotW * 1.2f));
 
     std::vector<int> allItemIds;
     allItemIds.reserve(itemTypes.size());
@@ -2666,7 +2667,7 @@ void renderInventory(int screenW, int screenH) {
             const int idx = startIndex + row * listCols + col;
             if (idx < 0 || idx >= static_cast<int>(allItemIds.size())) continue;
             const int itemId = allItemIds[idx];
-            const int x = listStartX + col * slotW;
+            const int x = listStartX + col * slotStepX;
             const int y = listStartY + row * slotH;
             const int itemPadding = std::max(1, std::min(slotW, slotH) / 8);
             const int itemSize = std::max(8, std::min(slotW, slotH) - itemPadding * 2);
@@ -2701,7 +2702,7 @@ void renderInventory(int screenW, int screenH) {
     for (int i = 0; i < 9; ++i) {
         if (hotbarItems[i].blockType == 0) continue;
         const int itemId = hotbarItems[i].blockType;
-        const int x = hbStartX + i * slotW;
+        const int x = hbStartX + i * slotStepX;
         const int y = hbStartY;
         const int itemPadding = std::max(1, std::min(slotW, slotH) / 8);
         const int itemSize = std::max(8, std::min(slotW, slotH) - itemPadding * 2);
@@ -2729,7 +2730,8 @@ void renderInventory(int screenW, int screenH) {
     }
 
     const bool canScroll = maxScrollRow > 0;
-    const unsigned int scrollTex = canScroll ? inventoryScrollerTexture : inventoryScrollerDisabledTexture;
+    unsigned int scrollTex = canScroll ? inventoryScrollerTexture : inventoryScrollerDisabledTexture;
+    if (scrollTex == 0) scrollTex = inventoryScrollerTexture;
     if (scrollTex != 0) {
         const int trackX = posX + static_cast<int>(174.0f * scaleX) + 1;
         const int trackTopY = posY + static_cast<int>(17.0f * scaleY);
