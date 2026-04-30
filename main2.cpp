@@ -131,6 +131,7 @@ bool isWorldButtonEnabled(int buttonIndex);
 void updateMainMenuOptions(GLFWwindow* window);
 void renderMainMenuOptions(int screenW, int screenH);
 void handleMainMenuOptionsClick(GLFWwindow* window, int button);
+void updateOptionsLayout(int screenW, int screenH);
 float calculateFallDamage(float distance);
 void applyDamage(int damage);
 bool isPlayerInWater();
@@ -150,8 +151,14 @@ void addFaceToVertices(std::vector<float>& verts,
         {1, 64}, {2, 64}, {3, 64}, {4, 64}, {5, 8}, 
         {6, 64}, {7, 64}, {8, 32}, {9, 16}
     };
-    void drawDimOverlay(int screenW, int screenH, float alpha);
-    void renderInventory(int screenW, int screenH);
+void drawDimOverlay(int screenW, int screenH, float alpha);
+void renderInventory(int screenW, int screenH);
+unsigned int loadUITexture(const char* path);
+void drawRectangle(float x, float y, float w, float h, unsigned int texture, int screenW, int screenH);
+float fitMinecraftTextScale(const std::string& text, float maxWidth, float maxHeight);
+void drawMinecraftTextCentered(const std::string& text, float centerX, float centerY, float scale, int screenW, int screenH, const glm::vec4& color);
+const char* tr(const char* en, const char* ru, const char* jp);
+extern double mouseX, mouseY;
 // Добавьте эти строки в секцию прототипов функций (примерно строка 63)
 struct Slider;
 void loadSliderTextures();
@@ -809,7 +816,7 @@ void initWorldNoise() {
 // ----------------------------------------------------------------------
 // НОВАЯ СИСТЕМА ОСВЕЩЕНИЯ (BFS) - ИСПРАВЛЕННАЯ (ДОБАВЛЕНО ОБНОВЛЕНИЕ НЕБЕСНОГО СВЕТА)
 // ----------------------------------------------------------------------
-const int MAX_LIGHT = 30;
+const int MAX_LIGHT = 15;
 
 // Проверка, является ли блок НЕПРОЗРАЧНЫМ (полностью блокирует свет)
 bool isOpaque(int blockId) {
@@ -1550,6 +1557,8 @@ int currentHotbarSlot = 0;
 constexpr int MAIN_MENU_BUTTON_COUNT = 6;
 constexpr int WORLD_SELECT_BUTTON_COUNT = 6;
 constexpr int LANGUAGE_BUTTON_COUNT = 1;
+constexpr int OPTIONS_ROW1_BUTTON_COUNT = 4;
+constexpr int OPTIONS_ROW2_BUTTON_COUNT = 5;
 struct Button {
     float relX, relY, relW, relH;
     float absX, absY, absW, absH;
@@ -1595,6 +1604,10 @@ void refreshLanguageMenuEntries();
 void applyLanguageSelection(int index);
 
 Button languageButtons[LANGUAGE_BUTTON_COUNT];
+Button optionsRow1Buttons[OPTIONS_ROW1_BUTTON_COUNT];
+Button optionsRow2Buttons[OPTIONS_ROW2_BUTTON_COUNT];
+Button optionsDifficultyButton;
+Button optionsDoneButton;
 void initLanguageMenu() {
     languageButtons[0] = {0.5f, 0.9f, 0.2025f, 0.0486f, 0,0,0,0, false, "Done"};
     updateUILabels();
@@ -1678,6 +1691,14 @@ void main() {
 // Текстуры для слайдера
 unsigned int sliderTrackTexture = 0;
 unsigned int sliderThumbTexture = 0;
+std::vector<Slider> optionsSliders;
+constexpr float OPTIONS_UI_SCALE = 1.3f;
+constexpr float OPTIONS_BUTTON_W = 430.0f * OPTIONS_UI_SCALE;
+constexpr float OPTIONS_BUTTON_H = 58.0f * OPTIONS_UI_SCALE;
+constexpr float OPTIONS_SLIDER_TRACK_W = OPTIONS_BUTTON_W;
+constexpr float OPTIONS_SLIDER_TRACK_H = OPTIONS_BUTTON_H;
+constexpr float OPTIONS_SLIDER_THUMB_W = 16.0f * OPTIONS_UI_SCALE * 1.1f;
+constexpr float OPTIONS_SLIDER_THUMB_H = OPTIONS_BUTTON_H;
 
 // Загрузка текстур слайдера
 void loadSliderTextures() {
@@ -1709,39 +1730,38 @@ std::string formatSliderValue(float value, int decimalPlaces) {
 
 // Проверка, находится ли мышь над слайдером
 bool isMouseOverSlider(const Slider& slider, double mouseX, double mouseY) {
-    return mouseX >= slider.absX && mouseX <= slider.absX + slider.absW &&
-           mouseY >= slider.absY && mouseY <= slider.absY + slider.absH;
+    const float trackX = slider.absX + (slider.absW - OPTIONS_SLIDER_TRACK_W) * 0.5f;
+    const float trackY = slider.absY + (slider.absH - OPTIONS_SLIDER_TRACK_H) * 0.5f;
+    return mouseX >= trackX && mouseX <= trackX + OPTIONS_SLIDER_TRACK_W &&
+           mouseY >= trackY && mouseY <= trackY + OPTIONS_SLIDER_TRACK_H;
 }
 
 // Отрисовка слайдера
 void drawSlider(const Slider& slider, int screenW, int screenH) {
     if (!sliderTrackTexture || !sliderThumbTexture) return;
-    
-    float trackHeight = slider.absH * 0.3f; // Высота дорожки - 30% от общей высоты
-    float trackY = slider.absY + (slider.absH - trackHeight) / 2;
-    float thumbSize = slider.absH * 0.8f;   // Размер ползунка - 80% от высоты
+    const float trackWidth = OPTIONS_SLIDER_TRACK_W;
+    const float trackHeight = OPTIONS_SLIDER_TRACK_H;
+    const float thumbWidth = OPTIONS_SLIDER_THUMB_W;
+    const float thumbHeight = OPTIONS_SLIDER_THUMB_H;
+    const float trackX = slider.absX + (slider.absW - trackWidth) * 0.5f;
+    const float trackY = slider.absY + (slider.absH - trackHeight) * 0.5f;
     
     // Проверка наведения
     bool hovered = isMouseOverSlider(slider, mouseX, mouseY) || slider.isDragging;
     
     // Рисуем дорожку слайдера
-    drawRectangle(slider.absX, trackY, slider.absW, trackHeight, 
+    drawRectangle(trackX, trackY, trackWidth, trackHeight, 
                   sliderTrackTexture, screenW, screenH);
     
     // Вычисляем позицию ползунка
     float normalizedValue = (*slider.value - slider.minValue) / (slider.maxValue - slider.minValue);
     normalizedValue = glm::clamp(normalizedValue, 0.0f, 1.0f);
-    float thumbX = slider.absX + normalizedValue * (slider.absW - thumbSize);
-    float thumbY = slider.absY + (slider.absH - thumbSize) / 2;
+    float thumbX = trackX + normalizedValue * (trackWidth - thumbWidth);
+    float thumbY = trackY + (trackHeight - thumbHeight) * 0.5f;
     
     // Рисуем ползунок
     unsigned int thumbTex = sliderThumbTexture;
-    if (menuButtonHighlightTexture && hovered) {
-        // Используем highlight текстуру при наведении
-        drawRectangle(thumbX - 2, thumbY - 2, thumbSize + 4, thumbSize + 4, 
-                     menuButtonHighlightTexture, screenW, screenH);
-    }
-    drawRectangle(thumbX, thumbY, thumbSize, thumbSize, thumbTex, screenW, screenH);
+    drawRectangle(thumbX, thumbY, thumbWidth, thumbHeight, thumbTex, screenW, screenH);
     
     // Формируем текст слайдера
     std::string displayText = std::string(slider.label) + ": " + 
@@ -1752,14 +1772,12 @@ void drawSlider(const Slider& slider, int screenW, int screenH) {
         glm::vec4(1.0f, 0.93f, 0.62f, 1.0f) :  // Желтоватый при наведении
         glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);     // Белый обычный
     
-    float scale = fitMinecraftTextScale(displayText, 
-                                       slider.absW * 0.8f, 
-                                       slider.absH * 0.4f);
+    float scale = fitMinecraftTextScale(displayText, trackWidth * 0.92f, trackHeight * 0.8f);
     
     drawMinecraftTextCentered(
         displayText,
-        slider.absX + slider.absW * 0.5f,
-        slider.absY - slider.absH * 0.15f,  // Текст над слайдером
+        trackX + trackWidth * 0.5f,
+        trackY + trackHeight * 0.52f,
         scale,
         screenW,
         screenH,
@@ -1769,7 +1787,14 @@ void drawSlider(const Slider& slider, int screenW, int screenH) {
 
 // Обработка кликов по слайдеру
 bool handleSliderClick(Slider& slider, double mouseX, double mouseY) {
-    if (!isMouseOverSlider(slider, mouseX, mouseY)) {
+    const float trackWidth = OPTIONS_SLIDER_TRACK_W;
+    const float trackHeight = OPTIONS_SLIDER_TRACK_H;
+    const float thumbWidth = OPTIONS_SLIDER_THUMB_W;
+    const float trackX = slider.absX + (slider.absW - trackWidth) * 0.5f;
+    const float trackY = slider.absY + (slider.absH - trackHeight) * 0.5f;
+    const bool insideTrack = mouseX >= trackX && mouseX <= trackX + trackWidth &&
+                             mouseY >= trackY && mouseY <= trackY + trackHeight;
+    if (!insideTrack) {
         slider.isDragging = false;
         return false;
     }
@@ -1777,9 +1802,8 @@ bool handleSliderClick(Slider& slider, double mouseX, double mouseY) {
     slider.isDragging = true;
     
     // Вычисляем новое значение на основе позиции мыши
-    float thumbSize = slider.absH * 0.8f;
-    float relativeX = (float)(mouseX - slider.absX - thumbSize / 2) / 
-                     (slider.absW - thumbSize);
+    float relativeX = (float)(mouseX - trackX - thumbWidth * 0.5f) /
+                     (trackWidth - thumbWidth);
     relativeX = glm::clamp(relativeX, 0.0f, 1.0f);
     
     float rawValue = slider.minValue + relativeX * (slider.maxValue - slider.minValue);
@@ -1796,10 +1820,11 @@ bool handleSliderClick(Slider& slider, double mouseX, double mouseY) {
 // Обработка перетаскивания слайдера
 void handleSliderDrag(Slider& slider, double mouseX, double mouseY) {
     if (!slider.isDragging) return;
-    
-    float thumbSize = slider.absH * 0.8f;
-    float relativeX = (float)(mouseX - slider.absX - thumbSize / 2) / 
-                     (slider.absW - thumbSize);
+    const float trackWidth = OPTIONS_SLIDER_TRACK_W;
+    const float thumbWidth = OPTIONS_SLIDER_THUMB_W;
+    const float trackX = slider.absX + (slider.absW - trackWidth) * 0.5f;
+    float relativeX = (float)(mouseX - trackX - thumbWidth * 0.5f) / 
+                     (trackWidth - thumbWidth);
     relativeX = glm::clamp(relativeX, 0.0f, 1.0f);
     
     float rawValue = slider.minValue + relativeX * (slider.maxValue - slider.minValue);
@@ -1841,23 +1866,6 @@ void initFOVSlider(std::vector<Slider>& sliders) {
     fovSlider.decimalPlaces = 0;  // Целое число, без десятичных знаков
     
     sliders.push_back(fovSlider);
-}
-
-// Или если хотите отдельную переменную для слайдера FOV:
-Slider fovSlider;  // Глобальная переменная для слайдера FOV
-
-void initFOVSlider() {
-    fovSlider.relX = 0.5f - 0.05f;  // 5% левее от середины (0.45 или 45% ширины)
-    fovSlider.relY = 0.1f;           // 10% от верха
-    fovSlider.relW = 0.4f;          // 40% ширины экрана
-    fovSlider.relH = 0.08f;         // 8% высоты экрана
-    fovSlider.label = tr("FOV", "FOV", "FOV");
-    fovSlider.minValue = 30.0f;
-    fovSlider.maxValue = 110.0f;
-    fovSlider.value = &currentFOV;
-    fovSlider.step = 1.0f;
-    fovSlider.isDragging = false;
-    fovSlider.decimalPlaces = 0;    // Без десятичных знаков
 }
 
 void initUI() {
@@ -3072,8 +3080,9 @@ struct Chunk {
         int wz = pos.y * CHUNK_SIZE_Z + lz;
         float ao = getVertexAO(lx, ly, lz, normal, vertexOffset);
         auto boostedLight = [](uint8_t skyLight, uint8_t blockLight) {
-            float boostedBlockLight = glm::min(static_cast<float>(MAX_LIGHT), blockLight * 1.5f);
-            return (skyLight + boostedBlockLight) / 30.0f;
+            float boostedBlockLight = glm::min(static_cast<float>(MAX_LIGHT), blockLight * 1.1f);
+            float dominant = glm::max(static_cast<float>(skyLight), boostedBlockLight);
+            return dominant / static_cast<float>(MAX_LIGHT);
         };
     
         if (normal.y > 0.5f) {
@@ -3155,6 +3164,42 @@ struct Chunk {
         return baseLight * ao;
     }
 
+    float getVertexBlockLight(int lx, int ly, int lz, const glm::vec3& normal, const glm::vec3& vertexOffset, const std::array<glm::ivec3,4>& neighborOffsets) {
+        int wx = pos.x * CHUNK_SIZE_X + lx;
+        int wz = pos.y * CHUNK_SIZE_Z + lz;
+
+        auto normBlock = [](uint8_t blockLight) {
+            return static_cast<float>(blockLight) / static_cast<float>(MAX_LIGHT);
+        };
+
+        if (normal.y > 0.5f || normal.y < -0.5f) {
+            int sampleY = normal.y > 0.5f ? ly + 1 : ly - 1;
+            if (sampleY < 0 || sampleY >= CHUNK_SIZE_Y) return 0.0f;
+            int sx = (vertexOffset.x >= 0.0f) ? 1 : -1;
+            int sz = (vertexOffset.z >= 0.0f) ? 1 : -1;
+            const int offsets[4][2] = {{0,0},{sx,0},{0,sz},{sx,sz}};
+            float total = 0.0f;
+            for (int i = 0; i < 4; ++i) {
+                int sampleWX = wx + offsets[i][0];
+                int sampleWZ = wz + offsets[i][1];
+                total += normBlock(getBlockLightAt(sampleWX, sampleY, sampleWZ));
+            }
+            return total * 0.25f;
+        }
+
+        float total = 0.0f;
+        int count = 0;
+        for (const auto& off : neighborOffsets) {
+            int nx = lx + off.x, ny = ly + off.y, nz = lz + off.z;
+            int sampleWX = pos.x * CHUNK_SIZE_X + nx;
+            int sampleWZ = pos.y * CHUNK_SIZE_Z + nz;
+            if (ny < 0 || ny >= CHUNK_SIZE_Y) continue;
+            total += normBlock(getBlockLightAt(sampleWX, ny, sampleWZ));
+            ++count;
+        }
+        return count > 0 ? total / count : 0.0f;
+    }
+
     void buildMesh() {
         if (!data) return;
         for (int i=0; i<256; ++i) if (vao[i]) { glDeleteVertexArrays(1, &vao[i]); glDeleteBuffers(1, &vbo[i]); vao[i]=vbo[i]=0; vertexCount[i]=0; }
@@ -3188,7 +3233,9 @@ struct Chunk {
                     out.push_back(n.x); out.push_back(n.y); out.push_back(n.z);
                     glm::vec3 vertexOffset(face[i], face[i+1], face[i+2]);
                     float light = getVertexLight(x, y, z, n, vertexOffset, faceNeighborOffsets[faceIdx]);
+                    float blockLight = getVertexBlockLight(x, y, z, n, vertexOffset, faceNeighborOffsets[faceIdx]);
                     out.push_back(light);
+                    out.push_back(blockLight);
                 }
             };
             std::vector<float>& verts = verticesPerType[type];
@@ -3214,11 +3261,12 @@ struct Chunk {
             glGenVertexArrays(1, &vao[type]); glGenBuffers(1, &vbo[type]);
             glBindVertexArray(vao[type]); glBindBuffer(GL_ARRAY_BUFFER, vbo[type]);
             glBufferData(GL_ARRAY_BUFFER, verts.size()*sizeof(float), verts.data(), GL_STATIC_DRAW);
-            glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,9*sizeof(float),(void*)0); glEnableVertexAttribArray(0);
-            glVertexAttribPointer(1,2,GL_FLOAT,GL_FALSE,9*sizeof(float),(void*)(3*sizeof(float))); glEnableVertexAttribArray(1);
-            glVertexAttribPointer(2,3,GL_FLOAT,GL_FALSE,9*sizeof(float),(void*)(5*sizeof(float))); glEnableVertexAttribArray(2);
-            glVertexAttribPointer(3,1,GL_FLOAT,GL_FALSE,9*sizeof(float),(void*)(8*sizeof(float))); glEnableVertexAttribArray(3);
-            vertexCount[type] = verts.size() / 9;
+            glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,10*sizeof(float),(void*)0); glEnableVertexAttribArray(0);
+            glVertexAttribPointer(1,2,GL_FLOAT,GL_FALSE,10*sizeof(float),(void*)(3*sizeof(float))); glEnableVertexAttribArray(1);
+            glVertexAttribPointer(2,3,GL_FLOAT,GL_FALSE,10*sizeof(float),(void*)(5*sizeof(float))); glEnableVertexAttribArray(2);
+            glVertexAttribPointer(3,1,GL_FLOAT,GL_FALSE,10*sizeof(float),(void*)(8*sizeof(float))); glEnableVertexAttribArray(3);
+            glVertexAttribPointer(4,1,GL_FLOAT,GL_FALSE,10*sizeof(float),(void*)(9*sizeof(float))); glEnableVertexAttribArray(4);
+            vertexCount[type] = verts.size() / 10;
         }
         meshReady = true;
     }
@@ -3746,18 +3794,20 @@ void renderSingleBlockModel(int blockType) {
         glBindBuffer(GL_ARRAY_BUFFER, vbo);
         glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
         
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 9*sizeof(float), (void*)0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 10*sizeof(float), (void*)0);
         glEnableVertexAttribArray(0);
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 9*sizeof(float), (void*)(3*sizeof(float)));
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 10*sizeof(float), (void*)(3*sizeof(float)));
         glEnableVertexAttribArray(1);
-        glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 9*sizeof(float), (void*)(5*sizeof(float)));
+        glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 10*sizeof(float), (void*)(5*sizeof(float)));
         glEnableVertexAttribArray(2);
-        glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, 9*sizeof(float), (void*)(8*sizeof(float)));
+        glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, 10*sizeof(float), (void*)(8*sizeof(float)));
         glEnableVertexAttribArray(3);
+        glVertexAttribPointer(4, 1, GL_FLOAT, GL_FALSE, 10*sizeof(float), (void*)(9*sizeof(float)));
+        glEnableVertexAttribArray(4);
         
         singleBlockVAO[blockType] = vao;
         singleBlockVBO[blockType] = vbo;
-        singleBlockVertexCount[blockType] = vertices.size() / 9;
+        singleBlockVertexCount[blockType] = vertices.size() / 10;
     }
     
     // Рендерим модель
@@ -3804,6 +3854,7 @@ verts.push_back(normal.y);
 verts.push_back(normal.z);
 
 verts.push_back(1.0f); // Яркость
+verts.push_back(0.0f); // Блочный свет для GUI-модели
 }
 }
 
@@ -4180,31 +4231,22 @@ void renderMainMenuOptions(int screenW, int screenH) {
     // Тот же фон, что и в главном меню
     if (menuBackgroundLightTexture || menuBackgroundTexture)
         drawTiledBackground(menuBackgroundLightTexture != 0 ? menuBackgroundLightTexture : menuBackgroundTexture, screenW, screenH);
-    // Кнопка "Back" - ВРЕМЕННО, пока нет других кнопок
-    float backBtnW = 200.0f, backBtnH = 50.0f;
-    float backBtnX = (screenW - backBtnW) * 0.5f;
-    float backBtnY = screenH - 100.0f;
-    
-    // Проверка наведения
-    bool backHovered = (mouseX >= backBtnX && mouseX <= backBtnX + backBtnW &&
-                        mouseY >= backBtnY && mouseY <= backBtnY + backBtnH);
-    
-    unsigned int tex = menuButtonTexture;
-    if (menuButtonHighlightTexture && backHovered) {
-        tex = menuButtonHighlightTexture;
+    drawMinecraftTextCentered("Options", screenW * 0.5f, screenH * 0.08f, 3.12f, screenW, screenH, glm::vec4(1.0f));
+    for (const auto& slider : optionsSliders) {
+        drawSlider(slider, screenW, screenH);
     }
-    
-    drawRectangle(backBtnX, backBtnY, backBtnW, backBtnH, tex, screenW, screenH);
-    
-    drawMinecraftTextCentered(
-        tr("Back", "Назад", "戻る"),
-        backBtnX + backBtnW * 0.5f,
-        backBtnY + backBtnH * 0.52f,
-        fitMinecraftButtonTextScale("Back", backBtnW, backBtnH),
-        screenW,
-        screenH,
-        getMenuTextColor(backHovered)
-    );
+
+    auto drawOptButton = [&](const Button& btn) {
+        const bool hovered = isMouseOverButton(btn, mouseX, mouseY);
+        unsigned int tex = (menuButtonHighlightTexture && hovered) ? menuButtonHighlightTexture : menuButtonTexture;
+        drawRectangle(btn.absX, btn.absY, btn.absW, btn.absH, tex, screenW, screenH);
+        drawMinecraftTextCentered(btn.label, btn.absX + btn.absW * 0.5f, btn.absY + btn.absH * 0.52f,
+            fitMinecraftButtonTextScale(btn.label, btn.absW, btn.absH), screenW, screenH, getMenuTextColor(hovered));
+    };
+    drawOptButton(optionsDifficultyButton);
+    for (int i = 0; i < OPTIONS_ROW1_BUTTON_COUNT; ++i) drawOptButton(optionsRow1Buttons[i]);
+    for (int i = 0; i < OPTIONS_ROW2_BUTTON_COUNT; ++i) drawOptButton(optionsRow2Buttons[i]);
+    drawOptButton(optionsDoneButton);
 
     glDisable(GL_BLEND);
     glEnable(GL_DEPTH_TEST);
@@ -4380,6 +4422,9 @@ void handleLanguageMenuClick(GLFWwindow* window, int button) {
 
 void updateMainMenuOptions(GLFWwindow* window) {
     static bool escWasPressed = false;
+    int w = 0, h = 0;
+    glfwGetWindowSize(window, &w, &h);
+    updateOptionsLayout(w, h);
     
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
         if (!escWasPressed) {
@@ -4389,6 +4434,66 @@ void updateMainMenuOptions(GLFWwindow* window) {
     } else {
         escWasPressed = false;
     }
+}
+
+void updateOptionsLayout(int screenW, int screenH) {
+    const float yOffset = screenH * 0.10f;
+    const float topY = screenH * 0.15f;
+    const float buttonW = OPTIONS_BUTTON_W;
+    const float buttonH = OPTIONS_BUTTON_H;
+    const float colGap = 44.0f * OPTIONS_UI_SCALE;
+    const float rowGap = 34.0f * OPTIONS_UI_SCALE;
+    const float leftX = screenW * 0.5f - colGap * 0.5f - buttonW;
+    const float rightX = screenW * 0.5f + colGap * 0.5f;
+
+    // FOV в левом верхнем блоке
+    if (!optionsSliders.empty()) {
+        optionsSliders[0].relX = (leftX + buttonW * 0.5f) / screenW;
+        optionsSliders[0].relY = (topY + yOffset) / screenH;
+        optionsSliders[0].relW = buttonW / screenW;
+        optionsSliders[0].relH = buttonH / screenH;
+        updateSliderPosition(optionsSliders[0], screenW, screenH);
+    }
+
+    // Difficulty справа от FOV
+    optionsDifficultyButton.label = tr("Difficulty: Hard", "Сложность: Сложно", "難易度: ハード");
+    optionsDifficultyButton.absW = buttonW;
+    optionsDifficultyButton.absH = buttonH;
+    optionsDifficultyButton.absX = rightX;
+    optionsDifficultyButton.absY = topY - buttonH * 0.5f + yOffset;
+
+    // Структура как на скриншоте
+    // Одиночная кнопка справа под Difficulty
+    optionsRow2Buttons[4].label = "Super Secret Settings...";
+    optionsRow2Buttons[4].absX = rightX;
+    optionsRow2Buttons[4].absY = optionsDifficultyButton.absY + buttonH + rowGap;
+    optionsRow2Buttons[4].absW = buttonW;
+    optionsRow2Buttons[4].absH = buttonH;
+
+    // Две колонки ниже
+    const float startRowsY = optionsRow2Buttons[4].absY + buttonH + rowGap;
+    const char* leftLabels[4] = { "Music & Sounds...", "Video Settings...", "Language...", "Resource Packs..." };
+    const char* rightLabels[4] = { "Broadcast Settings...", "Controls...", "Multiplayer Settings...", "Snooper Settings..." };
+    for (int i = 0; i < 4; ++i) {
+        optionsRow1Buttons[i].absW = buttonW;
+        optionsRow1Buttons[i].absH = buttonH;
+        optionsRow2Buttons[i].absW = buttonW;
+        optionsRow2Buttons[i].absH = buttonH;
+
+        optionsRow1Buttons[i].absX = leftX;
+        optionsRow1Buttons[i].absY = startRowsY + i * (buttonH + rowGap * 0.55f);
+        optionsRow1Buttons[i].label = leftLabels[i];
+
+        optionsRow2Buttons[i].absX = rightX;
+        optionsRow2Buttons[i].absY = startRowsY + i * (buttonH + rowGap * 0.55f);
+        optionsRow2Buttons[i].label = rightLabels[i];
+    }
+
+    optionsDoneButton.label = tr("Done", "Готово", "完了");
+    optionsDoneButton.absW = 560.0f * OPTIONS_UI_SCALE;
+    optionsDoneButton.absH = 50.0f * OPTIONS_UI_SCALE;
+    optionsDoneButton.absX = (screenW - optionsDoneButton.absW) * 0.5f;
+    optionsDoneButton.absY = optionsRow1Buttons[3].absY + buttonH + 46.0f * OPTIONS_UI_SCALE;
 }
 
 void handleWorldSelectMenuClick(GLFWwindow* window, int button) {
@@ -4564,9 +4669,9 @@ void processInputInGame(GLFWwindow* window, float deltaTime) {
     bool atWaterSurface = waistInWater && !headInWater;
     static bool wasInWaterLastFrame = false;
 
-    // В воде гравитация и скорость заметно слабее, но не выключаются полностью.
-    float currentGravity = inWater ? GRAVITY * 0.18f : GRAVITY;
-    float moveSpeed = inWater ? WALK_SPEED * 0.38f : WALK_SPEED;
+    // В воде гравитация и скорость слабее, но не "ватные" как раньше.
+    float currentGravity = inWater ? GRAVITY * 0.12f : GRAVITY;
+    float moveSpeed = inWater ? WALK_SPEED * 0.62f : WALK_SPEED;
 
     glm::vec3 moveDir(0.0f);
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) moveDir += cameraFront;
@@ -4578,12 +4683,13 @@ void processInputInGame(GLFWwindow* window, float deltaTime) {
     if (moving) moveDir = glm::normalize(moveDir);
     glm::vec3 desiredMove = moveDir * moveSpeed * deltaTime;
     
-    // Прыжок/всплытие
+    // Прыжок/всплытие и погружение
     const bool wantsSwimUp = glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
+    const bool wantsDiveDown = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS;
     if (wantsSwimUp) {
         if (inWater) {
-            const float swimImpulse = fullySubmerged ? 2.8f : 1.4f;
-            playerVelocity.y = std::min(playerVelocity.y + swimImpulse * deltaTime * 6.0f, fullySubmerged ? 2.0f : 0.9f);
+            const float swimImpulse = fullySubmerged ? 3.8f : 2.0f;
+            playerVelocity.y = std::min(playerVelocity.y + swimImpulse * deltaTime * 7.5f, fullySubmerged ? 2.6f : 1.2f);
         } else if (isOnGround) {
             playerVelocity.y = JUMP_POWER;
             isOnGround = false;
@@ -4593,16 +4699,22 @@ void processInputInGame(GLFWwindow* window, float deltaTime) {
     playerVelocity.y += currentGravity * deltaTime;
 
     if (inWater) {
-        // Вода сильно гасит вертикальную скорость.
-        playerVelocity.y *= 0.78f;
+        // Вода гасит вертикальную скорость, но оставляет ощущение инерции.
+        playerVelocity.y *= 0.86f;
 
         if (fullySubmerged) {
-            // Под водой игрок немного всплывает, но остаётся "тяжёлым".
-            playerVelocity.y = std::min(playerVelocity.y + 0.35f * deltaTime, 1.2f);
+            // Под водой игрок слабо всплывает, но может уверенно погружаться через Shift.
+            if (wantsDiveDown && !wantsSwimUp) {
+                playerVelocity.y = std::max(playerVelocity.y - 8.5f * deltaTime, -2.3f);
+            } else {
+                playerVelocity.y = std::min(playerVelocity.y + 0.55f * deltaTime, 1.5f);
+            }
         } else if (atWaterSurface) {
             // На поверхности держим голову у кромки воды, но не позволяем левитировать над ней.
             if (wantsSwimUp) {
-                playerVelocity.y = std::min(playerVelocity.y, 0.6f);
+                playerVelocity.y = std::min(playerVelocity.y, 0.9f);
+            } else if (wantsDiveDown) {
+                playerVelocity.y = std::max(playerVelocity.y - 7.0f * deltaTime, -1.6f);
             } else {
                 playerVelocity.y = std::min(playerVelocity.y, 0.0f);
                 if (playerVelocity.y > -0.55f) {
@@ -4615,7 +4727,7 @@ void processInputInGame(GLFWwindow* window, float deltaTime) {
             }
         }
 
-        playerVelocity.y = std::clamp(playerVelocity.y, -2.8f, 2.0f);
+        playerVelocity.y = std::clamp(playerVelocity.y, -3.2f, 2.6f);
     } else if (wasInWaterLastFrame && playerVelocity.y > 0.0f) {
         // При выходе из воды резко гасим остаточный подъём, чтобы игрок не "парил" над поверхностью.
         playerVelocity.y *= 0.28f;
@@ -4758,22 +4870,25 @@ void updatePauseMenu(GLFWwindow* window) {
 
 void handleMainMenuOptionsClick(GLFWwindow* window, int button) {
     if (button != GLFW_MOUSE_BUTTON_LEFT) return;
-    
+
     double mx, my;
     glfwGetCursorPos(window, &mx, &my);
-    
-    // Временная кнопка Back
-    int screenW, screenH;
-    glfwGetWindowSize(window, &screenW, &screenH);
-    
-    float backBtnW = 200.0f, backBtnH = 50.0f;
-    float backBtnX = (screenW - backBtnW) * 0.5f;
-    float backBtnY = screenH - 100.0f;
-    
-    if (mx >= backBtnX && mx <= backBtnX + backBtnW &&
-        my >= backBtnY && my <= backBtnY + backBtnH) {
+
+    if (isMouseOverButton(optionsDoneButton, mx, my)) {
         soundManager.playUISound("ui");
         currentState = GameState::MAIN_MENU;
+        return;
+    }
+
+    for (int i = 0; i < OPTIONS_ROW1_BUTTON_COUNT; ++i) {
+        if (isMouseOverButton(optionsRow1Buttons[i], mx, my)) {
+            if (std::string(optionsRow1Buttons[i].label) == "Language...") {
+                soundManager.playUISound("ui");
+                refreshLanguageMenuEntries();
+                currentState = GameState::LANGUAGE_MENU;
+            }
+            return;
+        }
     }
 }
 
@@ -4880,22 +4995,34 @@ void handlePauseMenuClick(GLFWwindow* window, int button) {
 // Коллбэки GLFW
 // ----------------------------------------------------------------------
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
-    if (action != GLFW_PRESS) return;
-
     if (currentState == GameState::MAIN_MENU) {
+        if (action != GLFW_PRESS) return;
         handleMainMenuClick(window, button);
     } else if (currentState == GameState::WORLD_SELECT_MENU) {
+        if (action != GLFW_PRESS) return;
         handleWorldSelectMenuClick(window, button);
     }else if (currentState == GameState::MAIN_MENU_OPTIONS) {
-        handleMainMenuOptionsClick(window, button);
+        if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
+            double mx, my;
+            glfwGetCursorPos(window, &mx, &my);
+            for (auto& slider : optionsSliders) {
+                if (handleSliderClick(slider, mx, my)) return;
+            }
+        } else if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE) {
+            for (auto& slider : optionsSliders) releaseSlider(slider);
+        }
+        if (action == GLFW_PRESS) handleMainMenuOptionsClick(window, button);
     } else if (currentState == GameState::PAUSE_MENU) {
+        if (action != GLFW_PRESS) return;
         handlePauseMenuClick(window, button);
     }else if (currentState == GameState::CREATIVE_INVENTORY) {
         // Заглушка
         return;
     } else if (currentState == GameState::LANGUAGE_MENU) {
+        if (action != GLFW_PRESS) return;
         handleLanguageMenuClick(window, button);
     } else if (currentState == GameState::IN_GAME) {
+        if (action != GLFW_PRESS) return;
         if (!movementEnabled) return;
         glm::vec3 rayDir = cameraFront;
         int hx, hy, hz, face;
@@ -4938,6 +5065,11 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
 void cursor_pos_callback(GLFWwindow* window, double x, double y) {
     mouseX = x;
     mouseY = y;
+    if (currentState == GameState::MAIN_MENU_OPTIONS) {
+        for (auto& slider : optionsSliders) {
+            handleSliderDrag(slider, x, y);
+        }
+    }
     if (currentState != GameState::IN_GAME || gamePaused) return;
     if (firstMouse) {
         lastX = x;
@@ -4970,7 +5102,8 @@ layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec2 aTexCoord;
 layout (location = 2) in vec3 aNormal;
 layout (location = 3) in float aLight;
-out vec2 TexCoord; out vec3 FragPos; out vec3 Normal; out float LightLevel;
+layout (location = 4) in float aBlockLight;
+out vec2 TexCoord; out vec3 FragPos; out vec3 Normal; out float LightLevel; out float BlockLightLevel;
 uniform mat4 model; uniform mat4 view; uniform mat4 projection;
 void main() {
     vec4 worldPos = model * vec4(aPos, 1.0);
@@ -4978,6 +5111,7 @@ void main() {
     TexCoord = aTexCoord; FragPos = worldPos.xyz;
     Normal = mat3(transpose(inverse(model))) * aNormal;
     LightLevel = aLight;
+    BlockLightLevel = aBlockLight;
 }
 )";
 const char *fragmentShaderSource = R"(
@@ -4985,7 +5119,7 @@ const char *fragmentShaderSource = R"(
 in vec2 TexCoord; out vec4 FragColor;
 uniform sampler2D ourTexture; uniform float u_time; uniform int u_isWater;
 uniform vec3 u_sunDir; uniform float u_sunIntensity; uniform float u_ambientBase;
-in vec3 FragPos; in vec3 Normal; in float LightLevel;
+in vec3 FragPos; in vec3 Normal; in float LightLevel; in float BlockLightLevel;
 void main() {
     vec2 uv = TexCoord;
     if (u_isWater == 1) {
@@ -4997,9 +5131,17 @@ void main() {
     vec3 n = normalize(Normal); vec3 lightDir = normalize(-u_sunDir);
     float diffuse = max(dot(n, lightDir), 0.0) * u_sunIntensity;
     float vertexLight = clamp(LightLevel, 0.0, 1.0);
+    float blockLightOnly = clamp(BlockLightLevel, 0.0, 1.0);
     float shade = mix(0.22, 1.0, pow(vertexLight, 0.85));
     float ambientFactor = mix(0.10, 1.0, pow(vertexLight, 1.15));
-    float lighting = u_ambientBase * ambientFactor + diffuse * shade;
+    float sunLighting = u_ambientBase * ambientFactor + diffuse * shade;
+
+    // Блочный свет (факелы/лампы) не должен полностью гаснуть ночью.
+    // Оставляем мягкую кривую, чтобы в темноте источники света выглядели ярко,
+    // а днём не пересвечивали поверхность.
+    float emissiveLighting = pow(blockLightOnly, 1.35) * 0.95;
+    float lighting = max(sunLighting, emissiveLighting);
+
     if (u_isWater==1) lighting = max(lighting, 0.12);
     FragColor = vec4(color.rgb * lighting, color.a);
 }
@@ -5076,6 +5218,8 @@ int main() {
 
     if (!loadBlockConfig("blocks.json")) return -1;
     initUI(); loadMenuTextures(); loadHUDTextures(); initLanguageMenu();
+    loadSliderTextures();
+    initFOVSlider(optionsSliders);
     if (fs::exists("sounds/hurtflesh1.ogg")) {
         soundManager.loadPlayerSound("hurt", "sounds/hurtflesh1.ogg");
     }
