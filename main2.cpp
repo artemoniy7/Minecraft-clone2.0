@@ -138,6 +138,7 @@ bool isPlayerInWater();
 void scanAmbientSounds();
 void playRandomAmbientSound();
 void renderSingleBlockModel(int blockType);
+void renderItemIconFlat(int itemId, int screenX, int screenY, int size, int screenW, int screenH);
 void initCloudLayer();
 void renderCloudLayer(float currentTime);
 void addFaceToVertices(std::vector<float>& verts, 
@@ -157,6 +158,7 @@ void drawDimOverlay(int screenW, int screenH, float alpha);
 void renderInventory(int screenW, int screenH);
 unsigned int loadUITexture(const char* path);
 unsigned int loadTextureStrip(const char* path, bool forceAlpha = false);
+bool loadItemConfig(const std::string& path);
 void drawRectangle(float x, float y, float w, float h, unsigned int texture, int screenW, int screenH);
 float fitMinecraftTextScale(const std::string& text, float maxWidth, float maxHeight);
 void drawMinecraftTextCentered(const std::string& text, float centerX, float centerY, float scale, int screenW, int screenH, const glm::vec4& color);
@@ -348,6 +350,16 @@ struct BlockType {
 };
 std::unordered_map<int, BlockType> blockTypes;
 int currentBlockType = 1;
+
+struct ItemType {
+    int id = 0;
+    std::string name;
+    std::string displayName;
+    int maxStack = 64;
+    bool isBlock = true;
+    unsigned int textureID = 0;
+};
+std::unordered_map<int, ItemType> itemTypes;
 
 // ----------------------------------------------------------------------
 // Звуки (без изменений)
@@ -1554,10 +1566,12 @@ unsigned int uiVAO, uiVBO, uiEBO;
 unsigned int fontVAO = 0, fontVBO = 0, fontEBO = 0;
 unsigned int menuBackgroundTexture = 0, menuBackgroundLightTexture = 0, menuBackgroundDarkTexture = 0;
 unsigned int menuButtonTexture = 0, menuButtonHighlightTexture = 0, menuPhotoTexture = 0; unsigned int menuButtonDisabledTexture = 0;
-unsigned int hotbarSlotTexture = 0, heartFullTexture = 0, heartHalfTexture = 0, hotbarSelTexture = 0, heartContTexture = 0;
+unsigned int hotbarTexture = 0, heartFullTexture = 0, heartHalfTexture = 0, hotbarSelTexture = 0, heartContTexture = 0;
 unsigned int minecraftAsciiTexture = 0;
 unsigned int languageButtonTexture = 0;
 unsigned int inventoryTexture = 0;
+unsigned int inventoryScrollerTexture = 0;
+unsigned int inventoryScrollerDisabledTexture = 0;
 std::unordered_map<int, unsigned int> minecraftFontPages;
 std::unordered_map<int, std::array<uint8_t, 256>> minecraftFontPageWidths;
 
@@ -1565,6 +1579,7 @@ unsigned int dimShaderProgram;
 unsigned int dimVAO;
 
 int currentHotbarSlot = 0;
+int inventoryScrollRow = 0;
 constexpr int MAIN_MENU_BUTTON_COUNT = 6;
 constexpr int WORLD_SELECT_BUTTON_COUNT = 6;
 constexpr int LANGUAGE_BUTTON_COUNT = 1;
@@ -2345,12 +2360,14 @@ void loadMenuTextures() {
 }
 
 void loadHUDTextures() {
-    hotbarSlotTexture = loadUITexture("textures/hotbar_slot.png");
+    hotbarTexture    = loadUITexture("textures/Hotbar.png");
     heartFullTexture  = loadUITexture("textures/heart_full.png");
     heartHalfTexture  = loadUITexture("textures/heart_half.png");
     hotbarSelTexture  = loadUITexture("textures/hotbar_sel.png");
     heartContTexture  = loadUITexture("textures/heart_cont.png");
     inventoryTexture  = loadUITexture("textures/creative_inventory.png");
+    inventoryScrollerTexture = loadUITexture("textures/scroller.png");
+    inventoryScrollerDisabledTexture = loadUITexture("textures/disable_scroller.png");
 }
 
 void updateButtonPositions(int screenW, int screenH) {
@@ -2602,6 +2619,106 @@ void renderInventory(int screenW, int screenH) {
     );
 
     drawRectangle(posX, posY, INV_W, INV_H, inventoryTexture, screenW, screenH);
+
+    const float scaleX = INV_W / 195.0f;
+    const float scaleY = INV_H / 136.0f;
+    const int slotW = static_cast<int>(18.0f * scaleX);
+    const int slotH = static_cast<int>(18.0f * scaleY);
+
+    const int listStartX = posX + static_cast<int>(8.0f * scaleX);
+    const int listStartY = posY + static_cast<int>(17.0f * scaleY);
+    const int listCols = 9;
+    const int listRowsVisible = 5;
+
+    std::vector<int> allItemIds;
+    allItemIds.reserve(itemTypes.size());
+    for (const auto& kv : itemTypes) allItemIds.push_back(kv.first);
+    std::sort(allItemIds.begin(), allItemIds.end());
+
+    const int totalRows = static_cast<int>((allItemIds.size() + listCols - 1) / listCols);
+    const int maxScrollRow = std::max(0, totalRows - listRowsVisible);
+    inventoryScrollRow = std::clamp(inventoryScrollRow, 0, maxScrollRow);
+
+    const int startIndex = inventoryScrollRow * listCols;
+    for (int row = 0; row < listRowsVisible; ++row) {
+        for (int col = 0; col < listCols; ++col) {
+            const int idx = startIndex + row * listCols + col;
+            if (idx < 0 || idx >= static_cast<int>(allItemIds.size())) continue;
+            const int itemId = allItemIds[idx];
+            const int x = listStartX + col * slotW;
+            const int y = listStartY + row * slotH;
+            const int itemPadding = std::max(1, slotW / 6);
+            const int itemSize = std::max(1, slotW - itemPadding * 2);
+            const auto it = itemTypes.find(itemId);
+            const bool isBlockItem = (it == itemTypes.end()) || it->second.isBlock;
+            if (isBlockItem) {
+                glEnable(GL_SCISSOR_TEST);
+                glScissor(x, screenH - (y + slotH), slotW, slotH);
+                glEnable(GL_DEPTH_TEST);
+                glDepthMask(GL_TRUE);
+                glDisable(GL_BLEND);
+
+                glViewport(x + itemPadding, screenH - (y + itemPadding + itemSize), itemSize, itemSize);
+                renderSingleBlockModel(itemId);
+                glViewport(0, 0, screenW, screenH);
+
+                glDisable(GL_DEPTH_TEST);
+                glDepthMask(GL_FALSE);
+                glEnable(GL_BLEND);
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                glDisable(GL_SCISSOR_TEST);
+            } else {
+                renderItemIconFlat(itemId, x + itemPadding, y + itemPadding, itemSize, screenW, screenH);
+            }
+        }
+    }
+
+    const int hbStartX = posX + static_cast<int>(8.0f * scaleX);
+    const int hbStartY = posY + static_cast<int>(111.0f * scaleY);
+    for (int i = 0; i < 9; ++i) {
+        if (hotbarItems[i].blockType == 0) continue;
+        const int itemId = hotbarItems[i].blockType;
+        const int x = hbStartX + i * slotW;
+        const int y = hbStartY;
+        const int itemPadding = std::max(1, slotW / 6);
+        const int itemSize = std::max(1, slotW - itemPadding * 2);
+        const auto it = itemTypes.find(itemId);
+        const bool isBlockItem = (it == itemTypes.end()) || it->second.isBlock;
+        if (isBlockItem) {
+            glEnable(GL_SCISSOR_TEST);
+            glScissor(x, screenH - (y + slotH), slotW, slotH);
+            glEnable(GL_DEPTH_TEST);
+            glDepthMask(GL_TRUE);
+            glDisable(GL_BLEND);
+            glViewport(x + itemPadding, screenH - (y + itemPadding + itemSize), itemSize, itemSize);
+            renderSingleBlockModel(itemId);
+            glViewport(0, 0, screenW, screenH);
+            glDisable(GL_DEPTH_TEST);
+            glDepthMask(GL_FALSE);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            glDisable(GL_SCISSOR_TEST);
+        } else {
+            renderItemIconFlat(itemId, x + itemPadding, y + itemPadding, itemSize, screenW, screenH);
+        }
+    }
+
+    const bool canScroll = maxScrollRow > 0;
+    const unsigned int scrollTex = canScroll ? inventoryScrollerTexture : inventoryScrollerDisabledTexture;
+    if (scrollTex != 0) {
+        const int trackX = posX + static_cast<int>(174.0f * scaleX);
+        const int trackTopY = posY + static_cast<int>(17.0f * scaleY);
+        const int trackBottomY = posY + static_cast<int>(126.0f * scaleY);
+        const int trackH = std::max(1, trackBottomY - trackTopY);
+        const int scrollerW = std::max(1, static_cast<int>((186.0f - 174.0f) * scaleX));
+        const int scrollerH = std::max(1, static_cast<int>(15.0f * scaleY));
+        int scrollerY = trackTopY;
+        if (canScroll) {
+            const float t = (maxScrollRow > 0) ? (static_cast<float>(inventoryScrollRow) / maxScrollRow) : 0.0f;
+            scrollerY = trackTopY + static_cast<int>(t * std::max(0, trackH - scrollerH));
+        }
+        drawRectangle(trackX, scrollerY, scrollerW, scrollerH, scrollTex, screenW, screenH);
+    }
     
     glDisable(GL_BLEND);
     glDepthMask(GL_TRUE);
@@ -2609,7 +2726,7 @@ void renderInventory(int screenW, int screenH) {
 
 void drawHUD(int screenW, int screenH, float currentTime)
 {
-    if (!hotbarSlotTexture ||
+    if (!hotbarTexture ||
         !heartFullTexture ||
         !heartHalfTexture ||
         !heartContTexture ||
@@ -2661,20 +2778,15 @@ void drawHUD(int screenW, int screenH, float currentTime)
 
     glUseProgram(uiShaderProgram);
 
-    for (int i = 0; i < HOTBAR_SLOTS; i++)
-    {
-        int x = startX + i * (SLOT_SIZE + SLOT_SPACING);
-
-        drawRectangle(
-            x,
-            startY,
-            SLOT_SIZE,
-            SLOT_SIZE,
-            hotbarSlotTexture,
-            screenW,
-            screenH
-        );
-    }
+    drawRectangle(
+        startX,
+        startY,
+        totalWidth,
+        SLOT_SIZE,
+        hotbarTexture,
+        screenW,
+        screenH
+    );
 
     // =========================================================
     // DRAW SELECTED SLOT
@@ -2695,10 +2807,8 @@ void drawHUD(int screenW, int screenH, float currentTime)
     }
 
     // =========================================================
-    // PREPARE FOR 3D ITEM RENDER
+    // PREPARE FOR ITEM RENDER (3D blocks + 2D item icons)
     // =========================================================
-
-    //glClear(GL_DEPTH_BUFFER_BIT);
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
@@ -2706,122 +2816,62 @@ void drawHUD(int screenW, int screenH, float currentTime)
     glDepthMask(GL_TRUE);
     glEnable(GL_SCISSOR_TEST);
 
-    // =========================================================
-    // COMMON MATRICES FOR ITEMS
-    // =========================================================
-
-    glm::mat4 proj = glm::perspective(
-        glm::radians(25.0f),
-        1.0f,
-        0.01f,
-        100.0f
-    );
-    
-    glm::mat4 view = glm::lookAt(
-        glm::vec3(0.0f, 0.0f, 3.5f),
-        glm::vec3(0.0f, 0.0f, 0.0f),
-        glm::vec3(0.0f, 1.0f, 0.0f)
-    );
+    glm::mat4 proj = glm::perspective(glm::radians(25.0f), 1.0f, 0.01f, 100.0f);
+    glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 3.5f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 
     glUseProgram(shaderProgram);
-
-    glUniformMatrix4fv(
-        u_viewLoc,
-        1,
-        GL_FALSE,
-        glm::value_ptr(view)
-    );
-
-    glUniformMatrix4fv(
-        u_projLoc,
-        1,
-        GL_FALSE,
-        glm::value_ptr(proj)
-    );
-
+    glUniformMatrix4fv(u_viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+    glUniformMatrix4fv(u_projLoc, 1, GL_FALSE, glm::value_ptr(proj));
     glUniform1f(u_sunIntensity_location, 1.0f);
     glUniform1f(u_ambientBase_location, 0.55f);
     glUniform1i(u_isWater_location, 0);
 
     // =========================================================
-    // DRAW 3D ITEMS
+    // DRAW HOTBAR ENTRIES
     // =========================================================
 
     for (int i = 0; i < HOTBAR_SLOTS; i++)
     {
-        if (hotbarItems[i].blockType == 0)
-            continue;
+        if (hotbarItems[i].blockType == 0) continue;
 
-        if (hotbarItems[i].blockType == 0)
-            continue;
+        const int itemId = hotbarItems[i].blockType;
+        const auto itemIt = itemTypes.find(itemId);
+        const bool isBlockItem = (itemIt == itemTypes.end()) || itemIt->second.isBlock;
 
         const int slotX = startX + i * (SLOT_SIZE + SLOT_SPACING);
         const int slotY = startY;
-
-        const int itemPadding = 8;
-
+        const int itemPadding = isBlockItem ? 8 : 10;
         const int itemSize = SLOT_SIZE - itemPadding * 2;
 
-        int viewportX = slotX + itemPadding;
+        if (isBlockItem) {
+            int viewportX = slotX + itemPadding;
+            int viewportY = screenH - (slotY + itemPadding + itemSize);
+            glViewport(viewportX, viewportY, itemSize, itemSize);
+            glScissor(viewportX, viewportY, itemSize, itemSize);
+            glClear(GL_DEPTH_BUFFER_BIT);
 
-        // =====================================================
-        // !!! ВАЖНО !!!
-        // OpenGL viewport использует начало координат
-        // СНИЗУ СЛЕВА.
-        // =====================================================
-
-        int viewportY =
-            screenH -
-            (slotY + itemPadding + itemSize);
-
-        glViewport(
-            viewportX,
-            viewportY,
-            itemSize,
-            itemSize
-        );
-        glScissor(
-            viewportX,
-            viewportY,
-            itemSize,
-            itemSize
-        );
-        glClear(GL_DEPTH_BUFFER_BIT);
-
-        // =====================================================
-        // MODEL
-        // =====================================================
-
-        glm::mat4 model = glm::mat4(1.0f);
-
-        // Minecraft GUI rotation
-        model = glm::rotate(
-            model,
-            glm::radians(30.0f),
-            glm::vec3(1.0f, 0.0f, 0.0f)
-        );
-
-        model = glm::rotate(
-            model,
-            glm::radians(225.0f),
-            glm::vec3(0.0f, 1.0f, 0.0f)
-        );
-
-        // Немного больше
-        model = glm::scale(
-            model,
-            glm::vec3(0.87f)
-        );
-
-        glUniformMatrix4fv(
-            u_modelLoc,
-            1,
-            GL_FALSE,
-            glm::value_ptr(model)
-        );
-        glDisable(GL_CULL_FACE);
-        renderSingleBlockModel(hotbarItems[i].blockType);
-        glEnable(GL_CULL_FACE);
+            glm::mat4 model = glm::mat4(1.0f);
+            model = glm::rotate(model, glm::radians(30.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+            model = glm::rotate(model, glm::radians(225.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+            model = glm::scale(model, glm::vec3(0.87f));
+            glUniformMatrix4fv(u_modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+            glDisable(GL_CULL_FACE);
+            renderSingleBlockModel(itemId);
+            glEnable(GL_CULL_FACE);
+        } else {
+            glDisable(GL_DEPTH_TEST);
+            glDisable(GL_CULL_FACE);
+            glDisable(GL_SCISSOR_TEST);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            glUseProgram(uiShaderProgram);
+            renderItemIconFlat(itemId, slotX + itemPadding, slotY + itemPadding, itemSize, screenW, screenH);
+            glUseProgram(shaderProgram);
+            glEnable(GL_DEPTH_TEST);
+            glEnable(GL_CULL_FACE);
+            glDisable(GL_BLEND);
+            glEnable(GL_SCISSOR_TEST);
+        }
     }
 
     // =========================================================
@@ -3562,7 +3612,7 @@ void saveAllChunks() {
     std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 }
 
-unsigned int loadTextureStrip(const char* path, bool forceAlpha = false) {
+unsigned int loadTextureStrip(const char* path, bool forceAlpha) {
     unsigned int tex; glGenTextures(1,&tex); glBindTexture(GL_TEXTURE_2D,tex);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
@@ -3831,6 +3881,12 @@ void renderSingleBlockModel(int blockType) {
     }
 }
 
+void renderItemIconFlat(int itemId, int screenX, int screenY, int size, int screenW, int screenH) {
+    auto it = itemTypes.find(itemId);
+    if (it == itemTypes.end() || it->second.textureID == 0) return;
+    drawRectangle(screenX, screenY, static_cast<float>(size), static_cast<float>(size), it->second.textureID, screenW, screenH);
+}
+
 void addFaceToVertices(std::vector<float>& verts, 
     glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, glm::vec3 v4,
     glm::vec3 normal, float uOffset) {
@@ -4039,6 +4095,36 @@ bool areChunksReady() {
             if (it == loadedChunks.end() || !it->second.data || !it->second.meshReady)
                 return false;
         }
+    return true;
+}
+
+bool loadItemConfig(const std::string& path) {
+    std::ifstream f(path);
+    if (!f.is_open()) return false;
+
+    json data = json::parse(f);
+    itemTypes.clear();
+
+    for (auto& item : data["items"]) {
+        ItemType it;
+        it.id = item["id"];
+        it.name = item.value("name", "");
+        it.displayName = item.value("displayName", it.name);
+        it.maxStack = item.value("maxStack", 64);
+
+        const std::string textureField = item.value("texture", "None");
+        it.isBlock = (textureField == "None");
+
+        if (!it.isBlock) {
+            std::string texturePath = textureField;
+            if (texturePath.rfind("textures/", 0) != 0) {
+                texturePath = "textures/items/" + texturePath;
+            }
+            it.textureID = loadUITexture(texturePath.c_str());
+        }
+
+        itemTypes[it.id] = std::move(it);
+    }
     return true;
 }
 
@@ -4664,9 +4750,10 @@ void processInputInGame(GLFWwindow* window, float deltaTime) {
     }
     
     // =========================================================
-    // ДВИЖЕНИЕ И ВЗАИМОДЕЙСТВИЕ ТОЛЬКО В РЕЖИМЕ ИГРЫ
+    // ФИЗИКА РАБОТАЕТ И В ИНВЕНТАРЕ, НО УПРАВЛЕНИЕ БЛОКИРУЕТСЯ
     // =========================================================
-    if (currentState != GameState::IN_GAME) return;
+    const bool inventoryOpen = (currentState == GameState::CREATIVE_INVENTORY);
+    if (currentState != GameState::IN_GAME && !inventoryOpen) return;
     if (!movementEnabled) return;
 
     // Определяем состояние воды
@@ -4685,18 +4772,20 @@ void processInputInGame(GLFWwindow* window, float deltaTime) {
     float moveSpeed = inWater ? WALK_SPEED * 0.62f : WALK_SPEED;
 
     glm::vec3 moveDir(0.0f);
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) moveDir += cameraFront;
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) moveDir -= cameraFront;
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) moveDir -= glm::normalize(glm::cross(cameraFront, cameraUp));
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) moveDir += glm::normalize(glm::cross(cameraFront, cameraUp));
+    if (!inventoryOpen) {
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) moveDir += cameraFront;
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) moveDir -= cameraFront;
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) moveDir -= glm::normalize(glm::cross(cameraFront, cameraUp));
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) moveDir += glm::normalize(glm::cross(cameraFront, cameraUp));
+    }
     
     bool moving = glm::length(moveDir) > 0.1f;
     if (moving) moveDir = glm::normalize(moveDir);
     glm::vec3 desiredMove = moveDir * moveSpeed * deltaTime;
     
     // Прыжок/всплытие и погружение
-    const bool wantsSwimUp = glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
-    const bool wantsDiveDown = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS;
+    const bool wantsSwimUp = !inventoryOpen && glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
+    const bool wantsDiveDown = !inventoryOpen && glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS;
     if (wantsSwimUp) {
         if (inWater) {
             const float swimImpulse = fullySubmerged ? 3.8f : 2.0f;
@@ -4784,14 +4873,16 @@ void processInputInGame(GLFWwindow* window, float deltaTime) {
     wasMoving = moving;
 
     // Выбор слота хотбара
-    for (int i = 0; i < 9; ++i)
-        if (glfwGetKey(window, GLFW_KEY_1 + i) == GLFW_PRESS)
-            currentHotbarSlot = i;
-    if (glfwGetKey(window, GLFW_KEY_9) == GLFW_PRESS)
-        currentBlockType = 9;
-    for (int i = 1; i <= 9; ++i)
-        if (glfwGetKey(window, GLFW_KEY_0 + i) == GLFW_PRESS && blockTypes.count(i))
-            currentBlockType = i;
+    if (!inventoryOpen) {
+        for (int i = 0; i < 9; ++i)
+            if (glfwGetKey(window, GLFW_KEY_1 + i) == GLFW_PRESS)
+                currentHotbarSlot = i;
+        if (glfwGetKey(window, GLFW_KEY_9) == GLFW_PRESS)
+            currentBlockType = 9;
+        for (int i = 1; i <= 9; ++i)
+            if (glfwGetKey(window, GLFW_KEY_0 + i) == GLFW_PRESS && blockTypes.count(i))
+                currentBlockType = i;
+    }
 }
 
 void renderGame(int screenW, int screenH, float currentTime) {
@@ -5108,7 +5199,10 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 }
 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
-    if (currentState == GameState::CREATIVE_INVENTORY) return;
+    if (currentState == GameState::CREATIVE_INVENTORY) {
+        inventoryScrollRow = std::max(0, inventoryScrollRow - static_cast<int>(yoffset));
+        return;
+    }
     
     if (currentState == GameState::WORLD_SELECT_MENU &&
         isInsideRect(static_cast<float>(mouseX), static_cast<float>(mouseY), worldListState.x, worldListState.y, worldListState.w, worldListState.h)) {
@@ -5279,6 +5373,7 @@ int main() {
     u_projLoc = glGetUniformLocation(shaderProgram,"projection");
 
     if (!loadBlockConfig("blocks.json")) return -1;
+    if (!loadItemConfig("items.json")) return -1;
     initUI(); loadMenuTextures(); loadHUDTextures(); initLanguageMenu();
     loadSliderTextures();
     initFOVSlider(optionsSliders);
@@ -5403,11 +5498,14 @@ int main() {
     glDeleteTextures(1, &menuButtonHighlightTexture);
     glDeleteTextures(1, &menuPhotoTexture);
     glDeleteTextures(1, &menuButtonDisabledTexture);
-    glDeleteTextures(1, &hotbarSlotTexture);
+    glDeleteTextures(1, &hotbarTexture);
     glDeleteTextures(1, &heartFullTexture);
     glDeleteTextures(1, &heartHalfTexture);
     glDeleteTextures(1, &hotbarSelTexture);
     glDeleteTextures(1, &heartContTexture);
+    glDeleteTextures(1, &inventoryTexture);
+    glDeleteTextures(1, &inventoryScrollerTexture);
+    glDeleteTextures(1, &inventoryScrollerDisabledTexture);
     glDeleteTextures(1, &minecraftAsciiTexture);
     for (auto& page : minecraftFontPages) {
         if (page.second != 0) {
@@ -5424,6 +5522,11 @@ int main() {
     glDeleteVertexArrays(1, &dimVAO);
     glDeleteProgram(dimShaderProgram);
     for (auto& p : blockTypes) glDeleteTextures(1, &p.second.textureID);
+    for (auto& p : itemTypes) {
+        if (!p.second.isBlock && p.second.textureID != 0) {
+            glDeleteTextures(1, &p.second.textureID);
+        }
+    }
     if (cloudTexture) glDeleteTextures(1, &cloudTexture);
     if (cloudVAO) glDeleteVertexArrays(1, &cloudVAO);
     if (cloudVBO) glDeleteBuffers(1, &cloudVBO);
