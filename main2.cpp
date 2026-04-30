@@ -2625,6 +2625,22 @@ void renderInventory(int screenW, int screenH) {
 
     drawRectangle(posX, posY, INV_W, INV_H, inventoryTexture, screenW, screenH);
 
+    // Настройка 3D-превью блоков в инвентаре: как в хотбаре.
+    glm::mat4 invProj = glm::perspective(glm::radians(25.0f), 1.0f, 0.01f, 100.0f);
+    glm::mat4 invView = glm::lookAt(glm::vec3(0.0f, 0.0f, 3.5f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    glm::mat4 invModel = glm::mat4(1.0f);
+    invModel = glm::rotate(invModel, glm::radians(30.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+    invModel = glm::rotate(invModel, glm::radians(225.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    invModel = glm::scale(invModel, glm::vec3(0.87f));
+
+    glUseProgram(shaderProgram);
+    glUniformMatrix4fv(u_viewLoc, 1, GL_FALSE, glm::value_ptr(invView));
+    glUniformMatrix4fv(u_projLoc, 1, GL_FALSE, glm::value_ptr(invProj));
+    glUniformMatrix4fv(u_modelLoc, 1, GL_FALSE, glm::value_ptr(invModel));
+    glUniform1f(u_sunIntensity_location, 1.0f);
+    glUniform1f(u_ambientBase_location, 0.55f);
+    glUniform1i(u_isWater_location, 0);
+
     const float scaleX = INV_W / 195.0f;
     const float scaleY = INV_H / 136.0f;
     const int slotW = static_cast<int>(18.0f * scaleX);
@@ -2663,17 +2679,7 @@ void renderInventory(int screenW, int screenH) {
                 glDepthMask(GL_TRUE);
                 glDisable(GL_BLEND);
 
-                const int viewportX = x + itemPadding;
-                const int viewportY = screenH - (y + itemPadding + itemSize);
-                glViewport(viewportX, viewportY, itemSize, itemSize);
-                glScissor(viewportX, viewportY, itemSize, itemSize);
-                glClear(GL_DEPTH_BUFFER_BIT);
-
-                glm::mat4 model = glm::mat4(1.0f);
-                model = glm::rotate(model, glm::radians(30.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-                model = glm::rotate(model, glm::radians(225.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-                model = glm::scale(model, glm::vec3(0.87f));
-                glUniformMatrix4fv(u_modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+                glViewport(x + itemPadding, screenH - (y + itemPadding + itemSize), itemSize, itemSize);
                 glDisable(GL_CULL_FACE);
                 renderSingleBlockModel(itemId);
                 glEnable(GL_CULL_FACE);
@@ -2707,17 +2713,7 @@ void renderInventory(int screenW, int screenH) {
             glEnable(GL_DEPTH_TEST);
             glDepthMask(GL_TRUE);
             glDisable(GL_BLEND);
-            const int viewportX = x + itemPadding;
-            const int viewportY = screenH - (y + itemPadding + itemSize);
-            glViewport(viewportX, viewportY, itemSize, itemSize);
-            glScissor(viewportX, viewportY, itemSize, itemSize);
-            glClear(GL_DEPTH_BUFFER_BIT);
-
-            glm::mat4 model = glm::mat4(1.0f);
-            model = glm::rotate(model, glm::radians(30.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-            model = glm::rotate(model, glm::radians(225.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-            model = glm::scale(model, glm::vec3(0.87f));
-            glUniformMatrix4fv(u_modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+            glViewport(x + itemPadding, screenH - (y + itemPadding + itemSize), itemSize, itemSize);
             glDisable(GL_CULL_FACE);
             renderSingleBlockModel(itemId);
             glEnable(GL_CULL_FACE);
