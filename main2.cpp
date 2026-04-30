@@ -4645,9 +4645,10 @@ void processInputInGame(GLFWwindow* window, float deltaTime) {
     }
     
     // =========================================================
-    // ДВИЖЕНИЕ И ВЗАИМОДЕЙСТВИЕ ТОЛЬКО В РЕЖИМЕ ИГРЫ
+    // ФИЗИКА РАБОТАЕТ И В ИНВЕНТАРЕ, НО УПРАВЛЕНИЕ БЛОКИРУЕТСЯ
     // =========================================================
-    if (currentState != GameState::IN_GAME) return;
+    const bool inventoryOpen = (currentState == GameState::CREATIVE_INVENTORY);
+    if (currentState != GameState::IN_GAME && !inventoryOpen) return;
     if (!movementEnabled) return;
 
     // Определяем состояние воды
@@ -4666,18 +4667,20 @@ void processInputInGame(GLFWwindow* window, float deltaTime) {
     float moveSpeed = inWater ? WALK_SPEED * 0.62f : WALK_SPEED;
 
     glm::vec3 moveDir(0.0f);
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) moveDir += cameraFront;
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) moveDir -= cameraFront;
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) moveDir -= glm::normalize(glm::cross(cameraFront, cameraUp));
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) moveDir += glm::normalize(glm::cross(cameraFront, cameraUp));
+    if (!inventoryOpen) {
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) moveDir += cameraFront;
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) moveDir -= cameraFront;
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) moveDir -= glm::normalize(glm::cross(cameraFront, cameraUp));
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) moveDir += glm::normalize(glm::cross(cameraFront, cameraUp));
+    }
     
     bool moving = glm::length(moveDir) > 0.1f;
     if (moving) moveDir = glm::normalize(moveDir);
     glm::vec3 desiredMove = moveDir * moveSpeed * deltaTime;
     
     // Прыжок/всплытие и погружение
-    const bool wantsSwimUp = glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
-    const bool wantsDiveDown = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS;
+    const bool wantsSwimUp = !inventoryOpen && glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
+    const bool wantsDiveDown = !inventoryOpen && glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS;
     if (wantsSwimUp) {
         if (inWater) {
             const float swimImpulse = fullySubmerged ? 3.8f : 2.0f;
@@ -4765,14 +4768,16 @@ void processInputInGame(GLFWwindow* window, float deltaTime) {
     wasMoving = moving;
 
     // Выбор слота хотбара
-    for (int i = 0; i < 9; ++i)
-        if (glfwGetKey(window, GLFW_KEY_1 + i) == GLFW_PRESS)
-            currentHotbarSlot = i;
-    if (glfwGetKey(window, GLFW_KEY_9) == GLFW_PRESS)
-        currentBlockType = 9;
-    for (int i = 1; i <= 9; ++i)
-        if (glfwGetKey(window, GLFW_KEY_0 + i) == GLFW_PRESS && blockTypes.count(i))
-            currentBlockType = i;
+    if (!inventoryOpen) {
+        for (int i = 0; i < 9; ++i)
+            if (glfwGetKey(window, GLFW_KEY_1 + i) == GLFW_PRESS)
+                currentHotbarSlot = i;
+        if (glfwGetKey(window, GLFW_KEY_9) == GLFW_PRESS)
+            currentBlockType = 9;
+        for (int i = 1; i <= 9; ++i)
+            if (glfwGetKey(window, GLFW_KEY_0 + i) == GLFW_PRESS && blockTypes.count(i))
+                currentBlockType = i;
+    }
 }
 
 void renderGame(int screenW, int screenH, float currentTime) {
