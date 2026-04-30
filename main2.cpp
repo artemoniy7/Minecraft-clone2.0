@@ -816,7 +816,7 @@ void initWorldNoise() {
 // ----------------------------------------------------------------------
 // НОВАЯ СИСТЕМА ОСВЕЩЕНИЯ (BFS) - ИСПРАВЛЕННАЯ (ДОБАВЛЕНО ОБНОВЛЕНИЕ НЕБЕСНОГО СВЕТА)
 // ----------------------------------------------------------------------
-const int MAX_LIGHT = 30;
+const int MAX_LIGHT = 15;
 
 // Проверка, является ли блок НЕПРОЗРАЧНЫМ (полностью блокирует свет)
 bool isOpaque(int blockId) {
@@ -1697,7 +1697,7 @@ constexpr float OPTIONS_BUTTON_W = 430.0f * OPTIONS_UI_SCALE;
 constexpr float OPTIONS_BUTTON_H = 58.0f * OPTIONS_UI_SCALE;
 constexpr float OPTIONS_SLIDER_TRACK_W = OPTIONS_BUTTON_W;
 constexpr float OPTIONS_SLIDER_TRACK_H = OPTIONS_BUTTON_H;
-constexpr float OPTIONS_SLIDER_THUMB_W = 16.0f * OPTIONS_UI_SCALE * 1.3f;
+constexpr float OPTIONS_SLIDER_THUMB_W = 16.0f * OPTIONS_UI_SCALE * 1.1f;
 constexpr float OPTIONS_SLIDER_THUMB_H = OPTIONS_BUTTON_H;
 
 // Загрузка текстур слайдера
@@ -3080,8 +3080,9 @@ struct Chunk {
         int wz = pos.y * CHUNK_SIZE_Z + lz;
         float ao = getVertexAO(lx, ly, lz, normal, vertexOffset);
         auto boostedLight = [](uint8_t skyLight, uint8_t blockLight) {
-            float boostedBlockLight = glm::min(static_cast<float>(MAX_LIGHT), blockLight * 1.5f);
-            return (skyLight + boostedBlockLight) / 30.0f;
+            float boostedBlockLight = glm::min(static_cast<float>(MAX_LIGHT), blockLight * 1.1f);
+            float dominant = glm::max(static_cast<float>(skyLight), boostedBlockLight);
+            return dominant / static_cast<float>(MAX_LIGHT);
         };
     
         if (normal.y > 0.5f) {
