@@ -4854,7 +4854,7 @@ void initCloudLayer() {
     cloudTexture = loadTextureStrip("textures/environment/clouds.png", true);
 
     const float y = 120.0f;
-    const float halfSize = 1024.0f;
+    const float halfSize = 2048.0f;
     const float uvScale = 8.0f;
     const float vtx[] = {
         -halfSize, y, -halfSize,   0.0f,     0.0f,    0.0f, -1.0f, 0.0f, 0.92f, 0.0f,
