@@ -5135,13 +5135,18 @@ void main() {
         uv.y = uv.y / frames + floor(frame) / frames;
     }
     vec4 color = texture(ourTexture, uv); if (u_isWater==1) color.a = 0.7;
-    vec3 n = normalize(Normal); vec3 lightDir = normalize(-u_sunDir);
-    float diffuse = max(dot(n, lightDir), 0.0) * u_sunIntensity;
+    vec3 n = normalize(Normal);
     float vertexLight = clamp(LightLevel, 0.0, 1.0);
     float blockLightOnly = clamp(BlockLightLevel, 0.0, 1.0);
-    float shade = mix(0.22, 1.0, pow(vertexLight, 0.85));
+
+    // Minecraft-подобное постоянное затенение граней: без "солнца сбоку".
+    float faceShade = 0.86;
+    if (n.y > 0.5) faceShade = 1.0;
+    else if (n.y < -0.5) faceShade = 0.72;
+
     float ambientFactor = mix(0.10, 1.0, pow(vertexLight, 1.15));
-    float sunLighting = u_ambientBase * ambientFactor + diffuse * shade;
+    float dayFactor = mix(0.55, 1.0, clamp(u_sunIntensity, 0.0, 1.0));
+    float sunLighting = u_ambientBase * ambientFactor * faceShade * dayFactor;
 
     // Блочный свет (факелы/лампы) не должен полностью гаснуть ночью.
     // Оставляем мягкую кривую, чтобы в темноте источники света выглядели ярко,
