@@ -2663,8 +2663,20 @@ void renderInventory(int screenW, int screenH) {
                 glDepthMask(GL_TRUE);
                 glDisable(GL_BLEND);
 
-                glViewport(x + itemPadding, screenH - (y + itemPadding + itemSize), itemSize, itemSize);
+                const int viewportX = x + itemPadding;
+                const int viewportY = screenH - (y + itemPadding + itemSize);
+                glViewport(viewportX, viewportY, itemSize, itemSize);
+                glScissor(viewportX, viewportY, itemSize, itemSize);
+                glClear(GL_DEPTH_BUFFER_BIT);
+
+                glm::mat4 model = glm::mat4(1.0f);
+                model = glm::rotate(model, glm::radians(30.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+                model = glm::rotate(model, glm::radians(225.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+                model = glm::scale(model, glm::vec3(0.87f));
+                glUniformMatrix4fv(u_modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+                glDisable(GL_CULL_FACE);
                 renderSingleBlockModel(itemId);
+                glEnable(GL_CULL_FACE);
                 glViewport(0, 0, screenW, screenH);
 
                 glDisable(GL_DEPTH_TEST);
@@ -2695,8 +2707,20 @@ void renderInventory(int screenW, int screenH) {
             glEnable(GL_DEPTH_TEST);
             glDepthMask(GL_TRUE);
             glDisable(GL_BLEND);
-            glViewport(x + itemPadding, screenH - (y + itemPadding + itemSize), itemSize, itemSize);
+            const int viewportX = x + itemPadding;
+            const int viewportY = screenH - (y + itemPadding + itemSize);
+            glViewport(viewportX, viewportY, itemSize, itemSize);
+            glScissor(viewportX, viewportY, itemSize, itemSize);
+            glClear(GL_DEPTH_BUFFER_BIT);
+
+            glm::mat4 model = glm::mat4(1.0f);
+            model = glm::rotate(model, glm::radians(30.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+            model = glm::rotate(model, glm::radians(225.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+            model = glm::scale(model, glm::vec3(0.87f));
+            glUniformMatrix4fv(u_modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+            glDisable(GL_CULL_FACE);
             renderSingleBlockModel(itemId);
+            glEnable(GL_CULL_FACE);
             glViewport(0, 0, screenW, screenH);
             glDisable(GL_DEPTH_TEST);
             glDepthMask(GL_FALSE);
@@ -2711,7 +2735,7 @@ void renderInventory(int screenW, int screenH) {
     const bool canScroll = maxScrollRow > 0;
     const unsigned int scrollTex = canScroll ? inventoryScrollerTexture : inventoryScrollerDisabledTexture;
     if (scrollTex != 0) {
-        const int trackX = posX + static_cast<int>(174.0f * scaleX);
+        const int trackX = posX + static_cast<int>(174.0f * scaleX) + 1;
         const int trackTopY = posY + static_cast<int>(17.0f * scaleY);
         const int trackBottomY = posY + static_cast<int>(126.0f * scaleY);
         const int trackH = std::max(1, trackBottomY - trackTopY);
