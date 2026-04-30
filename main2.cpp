@@ -1570,6 +1570,8 @@ unsigned int hotbarTexture = 0, heartFullTexture = 0, heartHalfTexture = 0, hotb
 unsigned int minecraftAsciiTexture = 0;
 unsigned int languageButtonTexture = 0;
 unsigned int inventoryTexture = 0;
+unsigned int inventoryScrollerTexture = 0;
+unsigned int inventoryScrollerDisabledTexture = 0;
 std::unordered_map<int, unsigned int> minecraftFontPages;
 std::unordered_map<int, std::array<uint8_t, 256>> minecraftFontPageWidths;
 
@@ -1577,6 +1579,7 @@ unsigned int dimShaderProgram;
 unsigned int dimVAO;
 
 int currentHotbarSlot = 0;
+int inventoryScrollRow = 0;
 constexpr int MAIN_MENU_BUTTON_COUNT = 6;
 constexpr int WORLD_SELECT_BUTTON_COUNT = 6;
 constexpr int LANGUAGE_BUTTON_COUNT = 1;
@@ -2363,6 +2366,8 @@ void loadHUDTextures() {
     hotbarSelTexture  = loadUITexture("textures/hotbar_sel.png");
     heartContTexture  = loadUITexture("textures/heart_cont.png");
     inventoryTexture  = loadUITexture("textures/creative_inventory.png");
+    inventoryScrollerTexture = loadUITexture("textures/scroller.png");
+    inventoryScrollerDisabledTexture = loadUITexture("textures/disable_scroller.png");
 }
 
 void updateButtonPositions(int screenW, int screenH) {
@@ -2614,6 +2619,106 @@ void renderInventory(int screenW, int screenH) {
     );
 
     drawRectangle(posX, posY, INV_W, INV_H, inventoryTexture, screenW, screenH);
+
+    const float scaleX = INV_W / 195.0f;
+    const float scaleY = INV_H / 136.0f;
+    const int slotW = static_cast<int>(18.0f * scaleX);
+    const int slotH = static_cast<int>(18.0f * scaleY);
+
+    const int listStartX = posX + static_cast<int>(8.0f * scaleX);
+    const int listStartY = posY + static_cast<int>(17.0f * scaleY);
+    const int listCols = 9;
+    const int listRowsVisible = 5;
+
+    std::vector<int> allItemIds;
+    allItemIds.reserve(itemTypes.size());
+    for (const auto& kv : itemTypes) allItemIds.push_back(kv.first);
+    std::sort(allItemIds.begin(), allItemIds.end());
+
+    const int totalRows = static_cast<int>((allItemIds.size() + listCols - 1) / listCols);
+    const int maxScrollRow = std::max(0, totalRows - listRowsVisible);
+    inventoryScrollRow = std::clamp(inventoryScrollRow, 0, maxScrollRow);
+
+    const int startIndex = inventoryScrollRow * listCols;
+    for (int row = 0; row < listRowsVisible; ++row) {
+        for (int col = 0; col < listCols; ++col) {
+            const int idx = startIndex + row * listCols + col;
+            if (idx < 0 || idx >= static_cast<int>(allItemIds.size())) continue;
+            const int itemId = allItemIds[idx];
+            const int x = listStartX + col * slotW;
+            const int y = listStartY + row * slotH;
+            const int itemPadding = std::max(1, slotW / 6);
+            const int itemSize = std::max(1, slotW - itemPadding * 2);
+            const auto it = itemTypes.find(itemId);
+            const bool isBlockItem = (it == itemTypes.end()) || it->second.isBlock;
+            if (isBlockItem) {
+                glEnable(GL_SCISSOR_TEST);
+                glScissor(x, screenH - (y + slotH), slotW, slotH);
+                glEnable(GL_DEPTH_TEST);
+                glDepthMask(GL_TRUE);
+                glDisable(GL_BLEND);
+
+                glViewport(x + itemPadding, screenH - (y + itemPadding + itemSize), itemSize, itemSize);
+                renderSingleBlockModel(itemId);
+                glViewport(0, 0, screenW, screenH);
+
+                glDisable(GL_DEPTH_TEST);
+                glDepthMask(GL_FALSE);
+                glEnable(GL_BLEND);
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                glDisable(GL_SCISSOR_TEST);
+            } else {
+                renderItemIconFlat(itemId, x + itemPadding, y + itemPadding, itemSize, screenW, screenH);
+            }
+        }
+    }
+
+    const int hbStartX = posX + static_cast<int>(8.0f * scaleX);
+    const int hbStartY = posY + static_cast<int>(111.0f * scaleY);
+    for (int i = 0; i < 9; ++i) {
+        if (hotbarItems[i].blockType == 0) continue;
+        const int itemId = hotbarItems[i].blockType;
+        const int x = hbStartX + i * slotW;
+        const int y = hbStartY;
+        const int itemPadding = std::max(1, slotW / 6);
+        const int itemSize = std::max(1, slotW - itemPadding * 2);
+        const auto it = itemTypes.find(itemId);
+        const bool isBlockItem = (it == itemTypes.end()) || it->second.isBlock;
+        if (isBlockItem) {
+            glEnable(GL_SCISSOR_TEST);
+            glScissor(x, screenH - (y + slotH), slotW, slotH);
+            glEnable(GL_DEPTH_TEST);
+            glDepthMask(GL_TRUE);
+            glDisable(GL_BLEND);
+            glViewport(x + itemPadding, screenH - (y + itemPadding + itemSize), itemSize, itemSize);
+            renderSingleBlockModel(itemId);
+            glViewport(0, 0, screenW, screenH);
+            glDisable(GL_DEPTH_TEST);
+            glDepthMask(GL_FALSE);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            glDisable(GL_SCISSOR_TEST);
+        } else {
+            renderItemIconFlat(itemId, x + itemPadding, y + itemPadding, itemSize, screenW, screenH);
+        }
+    }
+
+    const bool canScroll = maxScrollRow > 0;
+    const unsigned int scrollTex = canScroll ? inventoryScrollerTexture : inventoryScrollerDisabledTexture;
+    if (scrollTex != 0) {
+        const int trackX = posX + static_cast<int>(174.0f * scaleX);
+        const int trackTopY = posY + static_cast<int>(17.0f * scaleY);
+        const int trackBottomY = posY + static_cast<int>(126.0f * scaleY);
+        const int trackH = std::max(1, trackBottomY - trackTopY);
+        const int scrollerW = std::max(1, static_cast<int>((186.0f - 174.0f) * scaleX));
+        const int scrollerH = std::max(1, static_cast<int>(15.0f * scaleY));
+        int scrollerY = trackTopY;
+        if (canScroll) {
+            const float t = (maxScrollRow > 0) ? (static_cast<float>(inventoryScrollRow) / maxScrollRow) : 0.0f;
+            scrollerY = trackTopY + static_cast<int>(t * std::max(0, trackH - scrollerH));
+        }
+        drawRectangle(trackX, scrollerY, scrollerW, scrollerH, scrollTex, screenW, screenH);
+    }
     
     glDisable(GL_BLEND);
     glDepthMask(GL_TRUE);
@@ -5094,7 +5199,10 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 }
 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
-    if (currentState == GameState::CREATIVE_INVENTORY) return;
+    if (currentState == GameState::CREATIVE_INVENTORY) {
+        inventoryScrollRow = std::max(0, inventoryScrollRow - static_cast<int>(yoffset));
+        return;
+    }
     
     if (currentState == GameState::WORLD_SELECT_MENU &&
         isInsideRect(static_cast<float>(mouseX), static_cast<float>(mouseY), worldListState.x, worldListState.y, worldListState.w, worldListState.h)) {
@@ -5395,6 +5503,9 @@ int main() {
     glDeleteTextures(1, &heartHalfTexture);
     glDeleteTextures(1, &hotbarSelTexture);
     glDeleteTextures(1, &heartContTexture);
+    glDeleteTextures(1, &inventoryTexture);
+    glDeleteTextures(1, &inventoryScrollerTexture);
+    glDeleteTextures(1, &inventoryScrollerDisabledTexture);
     glDeleteTextures(1, &minecraftAsciiTexture);
     for (auto& page : minecraftFontPages) {
         if (page.second != 0) {
