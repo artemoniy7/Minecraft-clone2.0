@@ -2368,6 +2368,9 @@ void loadHUDTextures() {
     inventoryTexture  = loadUITexture("textures/creative_inventory.png");
     inventoryScrollerTexture = loadUITexture("textures/scroller.png");
     inventoryScrollerDisabledTexture = loadUITexture("textures/disable_scroller.png");
+    if (!inventoryScrollerDisabledTexture) {
+        inventoryScrollerDisabledTexture = inventoryScrollerTexture;
+    }
 }
 
 void updateButtonPositions(int screenW, int screenH) {
@@ -2584,9 +2587,11 @@ void drawDimOverlay(int screenW, int screenH, float alpha) {
 void renderInventory(int screenW, int screenH) {
     if (!inventoryTexture) return;
     
-    // Размеры текстуры инвентаря (195x136)
-    const int INV_W = 507;   // 390 * 1.3
-    const int INV_H = 354;   // 272 * 1.3
+    // Масштаб UI инвентаря относительно базовой текстуры 195x136.
+    // Держим единый коэффициент, чтобы слоты, блоки и скроллер не "разъезжались".
+    constexpr float INVENTORY_UI_SCALE = 2.6f;
+    const int INV_W = static_cast<int>(195.0f * INVENTORY_UI_SCALE);
+    const int INV_H = static_cast<int>(136.0f * INVENTORY_UI_SCALE);
     
     int posX = (screenW - INV_W) / 2;
     int posY = (screenH - INV_H) / 2;
@@ -2647,8 +2652,8 @@ void renderInventory(int screenW, int screenH) {
             const int itemId = allItemIds[idx];
             const int x = listStartX + col * slotW;
             const int y = listStartY + row * slotH;
-            const int itemPadding = std::max(1, slotW / 6);
-            const int itemSize = std::max(1, slotW - itemPadding * 2);
+            const int itemPadding = std::max(1, std::min(slotW, slotH) / 8);
+            const int itemSize = std::max(8, std::min(slotW, slotH) - itemPadding * 2);
             const auto it = itemTypes.find(itemId);
             const bool isBlockItem = (it == itemTypes.end()) || it->second.isBlock;
             if (isBlockItem) {
@@ -2657,6 +2662,22 @@ void renderInventory(int screenW, int screenH) {
                 glEnable(GL_DEPTH_TEST);
                 glDepthMask(GL_TRUE);
                 glDisable(GL_BLEND);
+                glEnable(GL_CULL_FACE);
+
+                glm::mat4 proj = glm::perspective(glm::radians(25.0f), 1.0f, 0.01f, 100.0f);
+                glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 3.5f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+                glm::mat4 model = glm::mat4(1.0f);
+                model = glm::rotate(model, glm::radians(30.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+                model = glm::rotate(model, glm::radians(225.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+                model = glm::scale(model, glm::vec3(0.87f));
+
+                glUseProgram(shaderProgram);
+                glUniformMatrix4fv(u_viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+                glUniformMatrix4fv(u_projLoc, 1, GL_FALSE, glm::value_ptr(proj));
+                glUniformMatrix4fv(u_modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+                glUniform1f(u_sunIntensity_location, 1.0f);
+                glUniform1f(u_ambientBase_location, 0.55f);
+                glUniform1i(u_isWater_location, 0);
 
                 glViewport(x + itemPadding, screenH - (y + itemPadding + itemSize), itemSize, itemSize);
                 renderSingleBlockModel(itemId);
@@ -2680,8 +2701,8 @@ void renderInventory(int screenW, int screenH) {
         const int itemId = hotbarItems[i].blockType;
         const int x = hbStartX + i * slotW;
         const int y = hbStartY;
-        const int itemPadding = std::max(1, slotW / 6);
-        const int itemSize = std::max(1, slotW - itemPadding * 2);
+        const int itemPadding = std::max(1, std::min(slotW, slotH) / 8);
+        const int itemSize = std::max(8, std::min(slotW, slotH) - itemPadding * 2);
         const auto it = itemTypes.find(itemId);
         const bool isBlockItem = (it == itemTypes.end()) || it->second.isBlock;
         if (isBlockItem) {
@@ -2690,6 +2711,23 @@ void renderInventory(int screenW, int screenH) {
             glEnable(GL_DEPTH_TEST);
             glDepthMask(GL_TRUE);
             glDisable(GL_BLEND);
+            glEnable(GL_CULL_FACE);
+
+            glm::mat4 proj = glm::perspective(glm::radians(25.0f), 1.0f, 0.01f, 100.0f);
+            glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 3.5f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+            glm::mat4 model = glm::mat4(1.0f);
+            model = glm::rotate(model, glm::radians(30.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+            model = glm::rotate(model, glm::radians(225.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+            model = glm::scale(model, glm::vec3(0.87f));
+
+            glUseProgram(shaderProgram);
+            glUniformMatrix4fv(u_viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+            glUniformMatrix4fv(u_projLoc, 1, GL_FALSE, glm::value_ptr(proj));
+            glUniformMatrix4fv(u_modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+            glUniform1f(u_sunIntensity_location, 1.0f);
+            glUniform1f(u_ambientBase_location, 0.55f);
+            glUniform1i(u_isWater_location, 0);
+
             glViewport(x + itemPadding, screenH - (y + itemPadding + itemSize), itemSize, itemSize);
             renderSingleBlockModel(itemId);
             glViewport(0, 0, screenW, screenH);
@@ -2704,14 +2742,15 @@ void renderInventory(int screenW, int screenH) {
     }
 
     const bool canScroll = maxScrollRow > 0;
-    const unsigned int scrollTex = canScroll ? inventoryScrollerTexture : inventoryScrollerDisabledTexture;
+    unsigned int scrollTex = canScroll ? inventoryScrollerTexture : inventoryScrollerDisabledTexture;
+    if (scrollTex == 0) scrollTex = inventoryScrollerTexture;
     if (scrollTex != 0) {
-        const int trackX = posX + static_cast<int>(174.0f * scaleX);
+        const int trackX = posX + static_cast<int>(174.0f * scaleX) + 1;
         const int trackTopY = posY + static_cast<int>(17.0f * scaleY);
         const int trackBottomY = posY + static_cast<int>(126.0f * scaleY);
         const int trackH = std::max(1, trackBottomY - trackTopY);
-        const int scrollerW = std::max(1, static_cast<int>((186.0f - 174.0f) * scaleX));
-        const int scrollerH = std::max(1, static_cast<int>(15.0f * scaleY));
+        const int scrollerW = std::max(8, static_cast<int>((186.0f - 174.0f) * scaleX));
+        const int scrollerH = std::max(8, static_cast<int>(15.0f * scaleY));
         int scrollerY = trackTopY;
         if (canScroll) {
             const float t = (maxScrollRow > 0) ? (static_cast<float>(inventoryScrollRow) / maxScrollRow) : 0.0f;
