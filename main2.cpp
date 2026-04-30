@@ -2679,6 +2679,22 @@ void renderInventory(int screenW, int screenH) {
                 glEnable(GL_DEPTH_TEST);
                 glDepthMask(GL_TRUE);
                 glDisable(GL_BLEND);
+                glEnable(GL_CULL_FACE);
+
+                glm::mat4 proj = glm::perspective(glm::radians(25.0f), 1.0f, 0.01f, 100.0f);
+                glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 3.5f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+                glm::mat4 model = glm::mat4(1.0f);
+                model = glm::rotate(model, glm::radians(30.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+                model = glm::rotate(model, glm::radians(225.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+                model = glm::scale(model, glm::vec3(0.87f));
+
+                glUseProgram(shaderProgram);
+                glUniformMatrix4fv(u_viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+                glUniformMatrix4fv(u_projLoc, 1, GL_FALSE, glm::value_ptr(proj));
+                glUniformMatrix4fv(u_modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+                glUniform1f(u_sunIntensity_location, 1.0f);
+                glUniform1f(u_ambientBase_location, 0.55f);
+                glUniform1i(u_isWater_location, 0);
 
                 glViewport(x + itemPadding, screenH - (y + itemPadding + itemSize), itemSize, itemSize);
                 glDisable(GL_CULL_FACE);
@@ -2714,6 +2730,23 @@ void renderInventory(int screenW, int screenH) {
             glEnable(GL_DEPTH_TEST);
             glDepthMask(GL_TRUE);
             glDisable(GL_BLEND);
+            glEnable(GL_CULL_FACE);
+
+            glm::mat4 proj = glm::perspective(glm::radians(25.0f), 1.0f, 0.01f, 100.0f);
+            glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 3.5f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+            glm::mat4 model = glm::mat4(1.0f);
+            model = glm::rotate(model, glm::radians(30.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+            model = glm::rotate(model, glm::radians(225.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+            model = glm::scale(model, glm::vec3(0.87f));
+
+            glUseProgram(shaderProgram);
+            glUniformMatrix4fv(u_viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+            glUniformMatrix4fv(u_projLoc, 1, GL_FALSE, glm::value_ptr(proj));
+            glUniformMatrix4fv(u_modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+            glUniform1f(u_sunIntensity_location, 1.0f);
+            glUniform1f(u_ambientBase_location, 0.55f);
+            glUniform1i(u_isWater_location, 0);
+
             glViewport(x + itemPadding, screenH - (y + itemPadding + itemSize), itemSize, itemSize);
             glDisable(GL_CULL_FACE);
             renderSingleBlockModel(itemId);
