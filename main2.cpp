@@ -138,6 +138,8 @@ bool isPlayerInWater();
 void scanAmbientSounds();
 void playRandomAmbientSound();
 void renderSingleBlockModel(int blockType);
+void initCloudLayer();
+void renderCloudLayer(float currentTime);
 void addFaceToVertices(std::vector<float>& verts, 
     glm::vec3 v1, glm::vec3 v2, glm::vec3 v3, glm::vec3 v4,
     glm::vec3 normal, float uOffset);
@@ -154,6 +156,7 @@ void addFaceToVertices(std::vector<float>& verts,
 void drawDimOverlay(int screenW, int screenH, float alpha);
 void renderInventory(int screenW, int screenH);
 unsigned int loadUITexture(const char* path);
+unsigned int loadTextureStrip(const char* path, bool forceAlpha = false);
 void drawRectangle(float x, float y, float w, float h, unsigned int texture, int screenW, int screenH);
 float fitMinecraftTextScale(const std::string& text, float maxWidth, float maxHeight);
 void drawMinecraftTextCentered(const std::string& text, float centerX, float centerY, float scale, int screenW, int screenH, const glm::vec4& color);
@@ -1470,6 +1473,7 @@ void workerFunction() {
 // Шейдерные переменные
 // ----------------------------------------------------------------------
 unsigned int shaderProgram, reticleProgram, reticleVAO;
+unsigned int cloudTexture = 0, cloudVAO = 0, cloudVBO = 0;
 int u_time_location, u_isWater_location, u_sunDir_location, u_sunIntensity_location, u_ambientBase_location;
 
 struct Chunk;
@@ -4815,6 +4819,7 @@ void renderGame(int screenW, int screenH, float currentTime) {
     glUniform3fv(u_sunDir_location, 1, glm::value_ptr(sunDir));
     glUniform1f(u_sunIntensity_location, sunIntensity);
     glUniform1f(u_ambientBase_location, ambientBase);
+    renderCloudLayer(currentTime);
 
     // Рендер всех чанков
     for (auto& p : loadedChunks)
@@ -4857,6 +4862,51 @@ void renderGame(int screenW, int screenH, float currentTime) {
     
     glDisable(GL_BLEND);
     glEnable(GL_DEPTH_TEST);
+}
+
+void initCloudLayer() {
+    cloudTexture = loadTextureStrip("textures/environment/clouds.png", true);
+
+    const float y = 120.0f;
+    const float halfSize = 1024.0f;
+    const float uvScale = 8.0f;
+    const float vtx[] = {
+        -halfSize, y, -halfSize,   0.0f,     0.0f,    0.0f, -1.0f, 0.0f, 0.92f, 0.0f,
+         halfSize, y, -halfSize,   uvScale,  0.0f,    0.0f, -1.0f, 0.0f, 0.92f, 0.0f,
+         halfSize, y,  halfSize,   uvScale,  uvScale, 0.0f, -1.0f, 0.0f, 0.92f, 0.0f,
+         halfSize, y,  halfSize,   uvScale,  uvScale, 0.0f, -1.0f, 0.0f, 0.92f, 0.0f,
+        -halfSize, y,  halfSize,   0.0f,     uvScale, 0.0f, -1.0f, 0.0f, 0.92f, 0.0f,
+        -halfSize, y, -halfSize,   0.0f,     0.0f,    0.0f, -1.0f, 0.0f, 0.92f, 0.0f
+    };
+
+    glGenVertexArrays(1, &cloudVAO);
+    glGenBuffers(1, &cloudVBO);
+    glBindVertexArray(cloudVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, cloudVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vtx), vtx, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 10 * sizeof(float), (void*)0); glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 10 * sizeof(float), (void*)(3 * sizeof(float))); glEnableVertexAttribArray(1);
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 10 * sizeof(float), (void*)(5 * sizeof(float))); glEnableVertexAttribArray(2);
+    glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, 10 * sizeof(float), (void*)(8 * sizeof(float))); glEnableVertexAttribArray(3);
+    glVertexAttribPointer(4, 1, GL_FLOAT, GL_FALSE, 10 * sizeof(float), (void*)(9 * sizeof(float))); glEnableVertexAttribArray(4);
+    glBindVertexArray(0);
+}
+
+void renderCloudLayer(float currentTime) {
+    if (!cloudVAO || !cloudTexture) return;
+    const float cloudSpeed = 0.45f;
+    glm::mat4 cloudModel = glm::translate(glm::mat4(1.0f), glm::vec3(currentTime * cloudSpeed, 0.0f, 0.0f));
+    glUniformMatrix4fv(u_modelLoc, 1, GL_FALSE, glm::value_ptr(cloudModel));
+    glUniform1i(u_isWater_location, 0);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, cloudTexture);
+    glBindVertexArray(cloudVAO);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    glDisable(GL_BLEND);
+    glBindVertexArray(0);
+    glUniformMatrix4fv(u_modelLoc, 1, GL_FALSE, glm::value_ptr(glm::mat4(1.0f)));
 }
 
 void updatePauseMenu(GLFWwindow* window) {
@@ -5232,6 +5282,7 @@ int main() {
     initUI(); loadMenuTextures(); loadHUDTextures(); initLanguageMenu();
     loadSliderTextures();
     initFOVSlider(optionsSliders);
+    initCloudLayer();
     if (fs::exists("sounds/hurtflesh1.ogg")) {
         soundManager.loadPlayerSound("hurt", "sounds/hurtflesh1.ogg");
     }
@@ -5373,6 +5424,9 @@ int main() {
     glDeleteVertexArrays(1, &dimVAO);
     glDeleteProgram(dimShaderProgram);
     for (auto& p : blockTypes) glDeleteTextures(1, &p.second.textureID);
+    if (cloudTexture) glDeleteTextures(1, &cloudTexture);
+    if (cloudVAO) glDeleteVertexArrays(1, &cloudVAO);
+    if (cloudVBO) glDeleteBuffers(1, &cloudVBO);
     glDeleteProgram(shaderProgram);
     glDeleteVertexArrays(1, &reticleVAO);
     glDeleteProgram(reticleProgram);
