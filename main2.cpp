@@ -3164,6 +3164,42 @@ struct Chunk {
         return baseLight * ao;
     }
 
+    float getVertexBlockLight(int lx, int ly, int lz, const glm::vec3& normal, const glm::vec3& vertexOffset, const std::array<glm::ivec3,4>& neighborOffsets) {
+        int wx = pos.x * CHUNK_SIZE_X + lx;
+        int wz = pos.y * CHUNK_SIZE_Z + lz;
+
+        auto normBlock = [](uint8_t blockLight) {
+            return static_cast<float>(blockLight) / static_cast<float>(MAX_LIGHT);
+        };
+
+        if (normal.y > 0.5f || normal.y < -0.5f) {
+            int sampleY = normal.y > 0.5f ? ly + 1 : ly - 1;
+            if (sampleY < 0 || sampleY >= CHUNK_SIZE_Y) return 0.0f;
+            int sx = (vertexOffset.x >= 0.0f) ? 1 : -1;
+            int sz = (vertexOffset.z >= 0.0f) ? 1 : -1;
+            const int offsets[4][2] = {{0,0},{sx,0},{0,sz},{sx,sz}};
+            float total = 0.0f;
+            for (int i = 0; i < 4; ++i) {
+                int sampleWX = wx + offsets[i][0];
+                int sampleWZ = wz + offsets[i][1];
+                total += normBlock(getBlockLightAt(sampleWX, sampleY, sampleWZ));
+            }
+            return total * 0.25f;
+        }
+
+        float total = 0.0f;
+        int count = 0;
+        for (const auto& off : neighborOffsets) {
+            int nx = lx + off.x, ny = ly + off.y, nz = lz + off.z;
+            int sampleWX = pos.x * CHUNK_SIZE_X + nx;
+            int sampleWZ = pos.y * CHUNK_SIZE_Z + nz;
+            if (ny < 0 || ny >= CHUNK_SIZE_Y) continue;
+            total += normBlock(getBlockLightAt(sampleWX, ny, sampleWZ));
+            ++count;
+        }
+        return count > 0 ? total / count : 0.0f;
+    }
+
     void buildMesh() {
         if (!data) return;
         for (int i=0; i<256; ++i) if (vao[i]) { glDeleteVertexArrays(1, &vao[i]); glDeleteBuffers(1, &vbo[i]); vao[i]=vbo[i]=0; vertexCount[i]=0; }
@@ -3197,7 +3233,9 @@ struct Chunk {
                     out.push_back(n.x); out.push_back(n.y); out.push_back(n.z);
                     glm::vec3 vertexOffset(face[i], face[i+1], face[i+2]);
                     float light = getVertexLight(x, y, z, n, vertexOffset, faceNeighborOffsets[faceIdx]);
+                    float blockLight = getVertexBlockLight(x, y, z, n, vertexOffset, faceNeighborOffsets[faceIdx]);
                     out.push_back(light);
+                    out.push_back(blockLight);
                 }
             };
             std::vector<float>& verts = verticesPerType[type];
@@ -3223,11 +3261,12 @@ struct Chunk {
             glGenVertexArrays(1, &vao[type]); glGenBuffers(1, &vbo[type]);
             glBindVertexArray(vao[type]); glBindBuffer(GL_ARRAY_BUFFER, vbo[type]);
             glBufferData(GL_ARRAY_BUFFER, verts.size()*sizeof(float), verts.data(), GL_STATIC_DRAW);
-            glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,9*sizeof(float),(void*)0); glEnableVertexAttribArray(0);
-            glVertexAttribPointer(1,2,GL_FLOAT,GL_FALSE,9*sizeof(float),(void*)(3*sizeof(float))); glEnableVertexAttribArray(1);
-            glVertexAttribPointer(2,3,GL_FLOAT,GL_FALSE,9*sizeof(float),(void*)(5*sizeof(float))); glEnableVertexAttribArray(2);
-            glVertexAttribPointer(3,1,GL_FLOAT,GL_FALSE,9*sizeof(float),(void*)(8*sizeof(float))); glEnableVertexAttribArray(3);
-            vertexCount[type] = verts.size() / 9;
+            glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,10*sizeof(float),(void*)0); glEnableVertexAttribArray(0);
+            glVertexAttribPointer(1,2,GL_FLOAT,GL_FALSE,10*sizeof(float),(void*)(3*sizeof(float))); glEnableVertexAttribArray(1);
+            glVertexAttribPointer(2,3,GL_FLOAT,GL_FALSE,10*sizeof(float),(void*)(5*sizeof(float))); glEnableVertexAttribArray(2);
+            glVertexAttribPointer(3,1,GL_FLOAT,GL_FALSE,10*sizeof(float),(void*)(8*sizeof(float))); glEnableVertexAttribArray(3);
+            glVertexAttribPointer(4,1,GL_FLOAT,GL_FALSE,10*sizeof(float),(void*)(9*sizeof(float))); glEnableVertexAttribArray(4);
+            vertexCount[type] = verts.size() / 10;
         }
         meshReady = true;
     }
@@ -3755,18 +3794,20 @@ void renderSingleBlockModel(int blockType) {
         glBindBuffer(GL_ARRAY_BUFFER, vbo);
         glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
         
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 9*sizeof(float), (void*)0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 10*sizeof(float), (void*)0);
         glEnableVertexAttribArray(0);
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 9*sizeof(float), (void*)(3*sizeof(float)));
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 10*sizeof(float), (void*)(3*sizeof(float)));
         glEnableVertexAttribArray(1);
-        glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 9*sizeof(float), (void*)(5*sizeof(float)));
+        glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 10*sizeof(float), (void*)(5*sizeof(float)));
         glEnableVertexAttribArray(2);
-        glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, 9*sizeof(float), (void*)(8*sizeof(float)));
+        glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, 10*sizeof(float), (void*)(8*sizeof(float)));
         glEnableVertexAttribArray(3);
+        glVertexAttribPointer(4, 1, GL_FLOAT, GL_FALSE, 10*sizeof(float), (void*)(9*sizeof(float)));
+        glEnableVertexAttribArray(4);
         
         singleBlockVAO[blockType] = vao;
         singleBlockVBO[blockType] = vbo;
-        singleBlockVertexCount[blockType] = vertices.size() / 9;
+        singleBlockVertexCount[blockType] = vertices.size() / 10;
     }
     
     // Рендерим модель
@@ -3813,6 +3854,7 @@ verts.push_back(normal.y);
 verts.push_back(normal.z);
 
 verts.push_back(1.0f); // Яркость
+verts.push_back(0.0f); // Блочный свет для GUI-модели
 }
 }
 
@@ -5060,7 +5102,8 @@ layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec2 aTexCoord;
 layout (location = 2) in vec3 aNormal;
 layout (location = 3) in float aLight;
-out vec2 TexCoord; out vec3 FragPos; out vec3 Normal; out float LightLevel;
+layout (location = 4) in float aBlockLight;
+out vec2 TexCoord; out vec3 FragPos; out vec3 Normal; out float LightLevel; out float BlockLightLevel;
 uniform mat4 model; uniform mat4 view; uniform mat4 projection;
 void main() {
     vec4 worldPos = model * vec4(aPos, 1.0);
@@ -5068,6 +5111,7 @@ void main() {
     TexCoord = aTexCoord; FragPos = worldPos.xyz;
     Normal = mat3(transpose(inverse(model))) * aNormal;
     LightLevel = aLight;
+    BlockLightLevel = aBlockLight;
 }
 )";
 const char *fragmentShaderSource = R"(
@@ -5075,7 +5119,7 @@ const char *fragmentShaderSource = R"(
 in vec2 TexCoord; out vec4 FragColor;
 uniform sampler2D ourTexture; uniform float u_time; uniform int u_isWater;
 uniform vec3 u_sunDir; uniform float u_sunIntensity; uniform float u_ambientBase;
-in vec3 FragPos; in vec3 Normal; in float LightLevel;
+in vec3 FragPos; in vec3 Normal; in float LightLevel; in float BlockLightLevel;
 void main() {
     vec2 uv = TexCoord;
     if (u_isWater == 1) {
@@ -5087,6 +5131,7 @@ void main() {
     vec3 n = normalize(Normal); vec3 lightDir = normalize(-u_sunDir);
     float diffuse = max(dot(n, lightDir), 0.0) * u_sunIntensity;
     float vertexLight = clamp(LightLevel, 0.0, 1.0);
+    float blockLightOnly = clamp(BlockLightLevel, 0.0, 1.0);
     float shade = mix(0.22, 1.0, pow(vertexLight, 0.85));
     float ambientFactor = mix(0.10, 1.0, pow(vertexLight, 1.15));
     float sunLighting = u_ambientBase * ambientFactor + diffuse * shade;
@@ -5094,7 +5139,7 @@ void main() {
     // Блочный свет (факелы/лампы) не должен полностью гаснуть ночью.
     // Оставляем мягкую кривую, чтобы в темноте источники света выглядели ярко,
     // а днём не пересвечивали поверхность.
-    float emissiveLighting = pow(vertexLight, 1.35) * 0.95;
+    float emissiveLighting = pow(blockLightOnly, 1.35) * 0.95;
     float lighting = max(sunLighting, emissiveLighting);
 
     if (u_isWater==1) lighting = max(lighting, 0.12);
