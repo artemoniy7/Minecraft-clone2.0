@@ -1,12 +1,60 @@
 {
-    "items": [
-      {"id": 1, "name": "minecraft:grass_block", "displayName": "Grass Block", "maxStack": 64, "texture": "None"},
-      {"id": 2, "name": "minecraft:dirt", "displayName": "Dirt", "maxStack": 64, "texture": "gui/dirt.png"},
-      {"id": 3, "name": "minecraft:stone", "displayName": "Stone", "maxStack": 64, "texture": "gui/stone.png"},
-      {"id": 4, "name": "minecraft:sand", "displayName": "Sand", "maxStack": 64, "texture": "gui/sand.png"},
-      {"id": 5, "name": "minecraft:water", "displayName": "Water", "maxStack": 1, "texture": "gui/water.png"},
-      {"id": 6, "name": "minecraft:oak_log", "displayName": "Oak Log", "maxStack": 64, "texture": "gui/oak_log.png"},
-      {"id": 7, "name": "minecraft:oak_leaves", "displayName": "Oak Leaves", "maxStack": 64, "texture": "gui/oak_leaves.png"},
-      {"id": 8, "name": "minecraft:cactus", "displayName": "Cactus", "maxStack": 64, "texture": "gui/cactus.png"}
-    ]
-  }
+  "items": [
+    {
+      "id": 1,
+      "name": "minecraft:grass_block",
+      "displayName": "Grass Block",
+      "maxStack": 64,
+      "texture": "None"
+    },
+    {
+      "id": 2,
+      "name": "minecraft:dirt",
+      "displayName": "Dirt",
+      "maxStack": 64,
+      "texture": "None"
+    },
+    {
+      "id": 3,
+      "name": "minecraft:stone",
+      "displayName": "Stone",
+      "maxStack": 64,
+      "texture": "None"
+    },
+    {
+      "id": 4,
+      "name": "minecraft:sand",
+      "displayName": "Sand",
+      "maxStack": 64,
+      "texture": "None"
+    },
+    {
+      "id": 5,
+      "name": "minecraft:water",
+      "displayName": "Water",
+      "maxStack": 1,
+      "texture": "None"
+    },
+    {
+      "id": 6,
+      "name": "minecraft:oak_log",
+      "displayName": "Oak Log",
+      "maxStack": 64,
+      "texture": "None"
+    },
+    {
+      "id": 7,
+      "name": "minecraft:oak_leaves",
+      "displayName": "Oak Leaves",
+      "maxStack": 64,
+      "texture": "None"
+    },
+    {
+      "id": 8,
+      "name": "minecraft:cactus",
+      "displayName": "Cactus",
+      "maxStack": 64,
+      "texture": "cactus.png"
+    }
+  ]
+}
