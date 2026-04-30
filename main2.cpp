@@ -2368,6 +2368,9 @@ void loadHUDTextures() {
     inventoryTexture  = loadUITexture("textures/creative_inventory.png");
     inventoryScrollerTexture = loadUITexture("textures/scroller.png");
     inventoryScrollerDisabledTexture = loadUITexture("textures/disable_scroller.png");
+    if (!inventoryScrollerDisabledTexture) {
+        inventoryScrollerDisabledTexture = inventoryScrollerTexture;
+    }
 }
 
 void updateButtonPositions(int screenW, int screenH) {
@@ -2649,9 +2652,8 @@ void renderInventory(int screenW, int screenH) {
             const int itemId = allItemIds[idx];
             const int x = listStartX + col * slotW;
             const int y = listStartY + row * slotH;
-            const int slotSize = std::max(1, std::min(slotW, slotH));
-            const int itemPadding = std::max(1, slotSize / 6);
-            const int itemSize = std::max(2, slotSize - itemPadding * 2);
+            const int itemPadding = std::max(1, std::min(slotW, slotH) / 8);
+            const int itemSize = std::max(8, std::min(slotW, slotH) - itemPadding * 2);
             const auto it = itemTypes.find(itemId);
             const bool isBlockItem = (it == itemTypes.end()) || it->second.isBlock;
             if (isBlockItem) {
@@ -2683,9 +2685,8 @@ void renderInventory(int screenW, int screenH) {
         const int itemId = hotbarItems[i].blockType;
         const int x = hbStartX + i * slotW;
         const int y = hbStartY;
-        const int slotSize = std::max(1, std::min(slotW, slotH));
-        const int itemPadding = std::max(1, slotSize / 6);
-        const int itemSize = std::max(2, slotSize - itemPadding * 2);
+        const int itemPadding = std::max(1, std::min(slotW, slotH) / 8);
+        const int itemSize = std::max(8, std::min(slotW, slotH) - itemPadding * 2);
         const auto it = itemTypes.find(itemId);
         const bool isBlockItem = (it == itemTypes.end()) || it->second.isBlock;
         if (isBlockItem) {
