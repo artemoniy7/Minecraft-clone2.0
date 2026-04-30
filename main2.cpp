@@ -5089,7 +5089,14 @@ void main() {
     float vertexLight = clamp(LightLevel, 0.0, 1.0);
     float shade = mix(0.22, 1.0, pow(vertexLight, 0.85));
     float ambientFactor = mix(0.10, 1.0, pow(vertexLight, 1.15));
-    float lighting = u_ambientBase * ambientFactor + diffuse * shade;
+    float sunLighting = u_ambientBase * ambientFactor + diffuse * shade;
+
+    // Блочный свет (факелы/лампы) не должен полностью гаснуть ночью.
+    // Оставляем мягкую кривую, чтобы в темноте источники света выглядели ярко,
+    // а днём не пересвечивали поверхность.
+    float emissiveLighting = pow(vertexLight, 1.35) * 0.95;
+    float lighting = max(sunLighting, emissiveLighting);
+
     if (u_isWater==1) lighting = max(lighting, 0.12);
     FragColor = vec4(color.rgb * lighting, color.a);
 }
