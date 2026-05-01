@@ -164,6 +164,7 @@ void addFaceToVertices(std::vector<float>& verts,
     };
 void drawDimOverlay(int screenW, int screenH, float alpha);
 void renderInventory(int screenW, int screenH);
+void syncInventoryHotbarFromGameHotbar();
 unsigned int loadUITexture(const char* path);
 unsigned int loadTextureStrip(const char* path, bool forceAlpha = false);
 bool loadItemConfig(const std::string& path);
@@ -2591,6 +2592,12 @@ void drawDimOverlay(int screenW, int screenH, float alpha) {
     glDisable(GL_BLEND);
 }
 
+void syncInventoryHotbarFromGameHotbar() {
+    for (int i = 0; i < 9; ++i) {
+        playerInventoryItems[27 + i] = hotbarItems[i];
+    }
+}
+
 // Рисует инвентарь по центру экрана
 void renderInventory(int screenW, int screenH) {
     if (!inventoryTexture) return;
@@ -2861,12 +2868,49 @@ void renderInventory(int screenW, int screenH) {
         }
     }
 
+    for (int row = 0; row < 3; ++row) {
+        for (int col = 0; col < 9; ++col) {
+            const int idx = row * 9 + col;
+            if (playerInventoryItems[idx].blockType == 0) continue;
+            const int itemId = playerInventoryItems[idx].blockType;
+            const int x = posX + static_cast<int>(8.0f * scaleX) + col * slotW;
+            const int y = posY + static_cast<int>(58.0f * scaleY) + row * slotH;
+            const int itemPadding = std::max(1, std::min(slotW, slotH) / 8);
+            const int itemSize = std::max(8, std::min(slotW, slotH) - itemPadding * 2);
+            const auto it = itemTypes.find(itemId);
+            const bool isBlockItem = (it == itemTypes.end()) || it->second.isBlock;
+            if (isBlockItem) {
+                glEnable(GL_SCISSOR_TEST);
+                glScissor(x, screenH - (y + slotH), slotW, slotH);
+                glEnable(GL_DEPTH_TEST);
+                glDepthMask(GL_TRUE);
+                glDisable(GL_BLEND);
+                glEnable(GL_CULL_FACE);
+                glUseProgram(shaderProgram);
+                glUniformMatrix4fv(u_viewLoc, 1, GL_FALSE, glm::value_ptr(blockPreviewView));
+                glUniformMatrix4fv(u_projLoc, 1, GL_FALSE, glm::value_ptr(blockPreviewProj));
+                glUniformMatrix4fv(u_modelLoc, 1, GL_FALSE, glm::value_ptr(blockPreviewModel));
+                glUniform1f(u_sunIntensity_location, 1.0f);
+                glUniform1f(u_ambientBase_location, 0.55f);
+                glUniform1i(u_isWater_location, 0);
+                glViewport(x + itemPadding, screenH - (y + itemPadding + itemSize), itemSize, itemSize);
+                glClear(GL_DEPTH_BUFFER_BIT);
+                renderSingleBlockModel(itemId);
+                glViewport(0, 0, screenW, screenH);
+                glDisable(GL_DEPTH_TEST);
+                glDepthMask(GL_FALSE);
+                glEnable(GL_BLEND);
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                glDisable(GL_SCISSOR_TEST);
+            } else {
+                renderItemIconFlat(itemId, x + itemPadding, y + itemPadding, itemSize, screenW, screenH);
+            }
+        }
+    }
+
     const int hbStartX = posX + static_cast<int>(8.0f * scaleX);
     const int hbStartY = posY + static_cast<int>(111.0f * scaleY);
-    
-    for (int i = 0; i < 9; ++i) {
-        playerInventoryItems[27 + i] = hotbarItems[i];
-    }
+    syncInventoryHotbarFromGameHotbar();
     for (int i = 0; i < 9; ++i) {
         const int invIdx = 27 + i;
         if (playerInventoryItems[invIdx].blockType == 0) continue;
