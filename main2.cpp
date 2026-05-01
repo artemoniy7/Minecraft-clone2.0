@@ -157,14 +157,6 @@ void addFaceToVertices(std::vector<float>& verts,
         {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0},
         {1, 64}, {2, 64}, {3, 64}, {4, 64}, {5, 8}, {6, 64}, {7, 64}, {8, 32}, {9, 16}
     };
-    // Инвентарь игрока: 3x9 + 9 слотов хотбара (всего 36).
-    // Последние 9 слотов дублируют текущий хотбар.
-    InventoryItem playerInventoryItems[36] = {
-        {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0},
-        {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0},
-        {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0},
-        {1, 64}, {2, 64}, {3, 64}, {4, 64}, {5, 8}, {6, 64}, {7, 64}, {8, 32}, {9, 16}
-    };
 void drawDimOverlay(int screenW, int screenH, float alpha);
 void renderInventory(int screenW, int screenH);
 void syncInventoryHotbarFromGameHotbar();
@@ -2928,19 +2920,9 @@ void renderInventory(int screenW, int screenH) {
                      scrollTex, screenW, screenH);
     }
     
-    // ===== ВОССТАНАВЛИВАЕМ ИСХОДНЫЕ СОСТОЯНИЯ =====
-    glViewport(oldViewport[0], oldViewport[1], oldViewport[2], oldViewport[3]);
-    glUseProgram(oldProgram);
-    glBindVertexArray(oldVAO);
-    glBindTexture(GL_TEXTURE_2D, oldTexture);
-    
-    if (depthEnabled) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
-    if (cullEnabled) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
-    if (blendEnabled) glEnable(GL_BLEND); else glDisable(GL_BLEND);
-    if (scissorEnabled) glEnable(GL_SCISSOR_TEST); else glDisable(GL_SCISSOR_TEST);
-    glDepthMask(depthMask);
-    glBlendFunc(blendSrc, blendDst);
-}
+    glDisable(GL_BLEND);
+    glDepthMask(GL_TRUE);
+} // renderInventory
 
 void drawHUD(int screenW, int screenH, float currentTime)
 {
