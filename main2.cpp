@@ -157,8 +157,17 @@ void addFaceToVertices(std::vector<float>& verts,
         {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0},
         {1, 64}, {2, 64}, {3, 64}, {4, 64}, {5, 8}, {6, 64}, {7, 64}, {8, 32}, {9, 16}
     };
+    // Инвентарь игрока: 3x9 + 9 слотов хотбара (всего 36).
+    // Последние 9 слотов дублируют текущий хотбар.
+    InventoryItem playerInventoryItems[36] = {
+        {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0},
+        {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0},
+        {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0},
+        {1, 64}, {2, 64}, {3, 64}, {4, 64}, {5, 8}, {6, 64}, {7, 64}, {8, 32}, {9, 16}
+    };
 void drawDimOverlay(int screenW, int screenH, float alpha);
 void renderInventory(int screenW, int screenH);
+void syncInventoryHotbarFromGameHotbar();
 unsigned int loadUITexture(const char* path);
 unsigned int loadTextureStrip(const char* path, bool forceAlpha = false);
 bool loadItemConfig(const std::string& path);
@@ -2586,6 +2595,12 @@ void drawDimOverlay(int screenW, int screenH, float alpha) {
     glDisable(GL_BLEND);
 }
 
+void syncInventoryHotbarFromGameHotbar() {
+    for (int i = 0; i < 9; ++i) {
+        playerInventoryItems[27 + i] = hotbarItems[i];
+    }
+}
+
 // Рисует инвентарь по центру экрана
 void renderInventory(int screenW, int screenH) {
     if (!inventoryTexture) return;
@@ -2599,13 +2614,35 @@ void renderInventory(int screenW, int screenH) {
     int posX = (screenW - INV_W) / 2;
     int posY = (screenH - INV_H) / 2;
     
+    // ===== СОХРАНЯЕМ ВСЕ СОСТОЯНИЯ OPENGL =====
+    GLboolean depthEnabled = glIsEnabled(GL_DEPTH_TEST);
+    GLboolean cullEnabled = glIsEnabled(GL_CULL_FACE);
+    GLboolean blendEnabled = glIsEnabled(GL_BLEND);
+    GLboolean scissorEnabled = glIsEnabled(GL_SCISSOR_TEST);
+    GLboolean depthMask;
+    glGetBooleanv(GL_DEPTH_WRITEMASK, &depthMask);
+    GLint oldViewport[4];
+    glGetIntegerv(GL_VIEWPORT, oldViewport);
+    GLint oldProgram;
+    glGetIntegerv(GL_CURRENT_PROGRAM, &oldProgram);
+    GLint oldTexture;
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &oldTexture);
+    GLint oldVAO;
+    glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &oldVAO);
+    GLint blendSrc, blendDst;
+    glGetIntegerv(GL_BLEND_SRC_ALPHA, &blendSrc);
+    glGetIntegerv(GL_BLEND_DST_ALPHA, &blendDst);
+    
+    // ===== РИСУЕМ ФОН ИНВЕНТАРЯ (2D) =====
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
     glDepthMask(GL_FALSE);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     
-    // Подкладываем ровную панель под PNG, чтобы полупрозрачные пиксели не давали чёрные полосы.
+    glUseProgram(uiShaderProgram);
+    
+    // Фон панели
     drawColorRectangle(
         static_cast<float>(posX),
         static_cast<float>(posY),
@@ -2625,9 +2662,13 @@ void renderInventory(int screenW, int screenH) {
         glm::vec4(0.18f, 0.18f, 0.18f, 1.0f),
         2.0f
     );
-
-    drawRectangle(posX, posY, INV_W, INV_H, inventoryTexture, screenW, screenH);
-
+    
+    // Текстура инвентаря
+    drawRectangle(static_cast<float>(posX), static_cast<float>(posY), 
+                  static_cast<float>(INV_W), static_cast<float>(INV_H), 
+                  inventoryTexture, screenW, screenH);
+    
+    // ===== ВЫЧИСЛЯЕМ РАЗМЕРЫ СЛОТОВ =====
     const float scaleX = INV_W / 195.0f;
     const float scaleY = INV_H / 136.0f;
     const int slotW = static_cast<int>(18.0f * scaleX);
@@ -2646,21 +2687,25 @@ void renderInventory(int screenW, int screenH) {
     const int listStartY = posY + static_cast<int>(17.0f * scaleY);
     const int listCols = 9;
     const int listRowsVisible = 5;
-
+    const int slotSpacingX = slotW + 1;  // +4 для зазора между слотами
+    
+    // ===== СОБИРАЕМ ВСЕ ПРЕДМЕТЫ =====
     std::vector<int> allItemIds;
     allItemIds.reserve(itemTypes.size());
     for (const auto& kv : itemTypes) allItemIds.push_back(kv.first);
     std::sort(allItemIds.begin(), allItemIds.end());
-
+    
     const int totalRows = static_cast<int>((allItemIds.size() + listCols - 1) / listCols);
     const int maxScrollRow = std::max(0, totalRows - listRowsVisible);
     inventoryScrollRow = std::clamp(inventoryScrollRow, 0, maxScrollRow);
-
+    
+    // ===== РИСУЕМ ПРЕДМЕТЫ =====
     const int startIndex = inventoryScrollRow * listCols;
     for (int row = 0; row < listRowsVisible; ++row) {
         for (int col = 0; col < listCols; ++col) {
             const int idx = startIndex + row * listCols + col;
             if (idx < 0 || idx >= static_cast<int>(allItemIds.size())) continue;
+            
             const int itemId = allItemIds[idx];
             const int x = listStartX + col * slotW;
             const int y = listStartY + row * slotH;
@@ -2684,11 +2729,75 @@ void renderInventory(int screenW, int screenH) {
                 glUniform1f(u_ambientBase_location, 0.55f);
                 glUniform1i(u_isWater_location, 0);
 
+    for (int row = 0; row < 3; ++row) {
+        for (int col = 0; col < 9; ++col) {
+            const int idx = row * 9 + col;
+            if (playerInventoryItems[idx].blockType == 0) continue;
+            const int itemId = playerInventoryItems[idx].blockType;
+            const int x = posX + static_cast<int>(8.0f * scaleX) + col * slotW;
+            const int y = posY + static_cast<int>(58.0f * scaleY) + row * slotH;
+            const int itemPadding = std::max(1, std::min(slotW, slotH) / 8);
+            const int itemSize = std::max(8, std::min(slotW, slotH) - itemPadding * 2);
+            const auto it = itemTypes.find(itemId);
+            const bool isBlockItem = (it == itemTypes.end()) || it->second.isBlock;
+            if (isBlockItem) {
+                glEnable(GL_SCISSOR_TEST);
+                glScissor(x, screenH - (y + slotH), slotW, slotH);
+                glEnable(GL_DEPTH_TEST);
+                glDepthMask(GL_TRUE);
+                glDisable(GL_BLEND);
+                glEnable(GL_CULL_FACE);
+                glUseProgram(shaderProgram);
+                glUniformMatrix4fv(u_viewLoc, 1, GL_FALSE, glm::value_ptr(blockPreviewView));
+                glUniformMatrix4fv(u_projLoc, 1, GL_FALSE, glm::value_ptr(blockPreviewProj));
+                glUniformMatrix4fv(u_modelLoc, 1, GL_FALSE, glm::value_ptr(blockPreviewModel));
+                glUniform1f(u_sunIntensity_location, 1.0f);
+                glUniform1f(u_ambientBase_location, 0.55f);
+                glUniform1i(u_isWater_location, 0);
                 glViewport(x + itemPadding, screenH - (y + itemPadding + itemSize), itemSize, itemSize);
                 glClear(GL_DEPTH_BUFFER_BIT);
                 renderSingleBlockModel(itemId);
                 glViewport(0, 0, screenW, screenH);
+                glDisable(GL_DEPTH_TEST);
+                glDepthMask(GL_FALSE);
+                glEnable(GL_BLEND);
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                glDisable(GL_SCISSOR_TEST);
+            } else {
+                renderItemIconFlat(itemId, x + itemPadding, y + itemPadding, itemSize, screenW, screenH);
+            }
+        }
+    }
 
+    for (int row = 0; row < 3; ++row) {
+        for (int col = 0; col < 9; ++col) {
+            const int idx = row * 9 + col;
+            if (playerInventoryItems[idx].blockType == 0) continue;
+            const int itemId = playerInventoryItems[idx].blockType;
+            const int x = posX + static_cast<int>(8.0f * scaleX) + col * slotW;
+            const int y = posY + static_cast<int>(58.0f * scaleY) + row * slotH;
+            const int itemPadding = std::max(1, std::min(slotW, slotH) / 8);
+            const int itemSize = std::max(8, std::min(slotW, slotH) - itemPadding * 2);
+            const auto it = itemTypes.find(itemId);
+            const bool isBlockItem = (it == itemTypes.end()) || it->second.isBlock;
+            if (isBlockItem) {
+                glEnable(GL_SCISSOR_TEST);
+                glScissor(x, screenH - (y + slotH), slotW, slotH);
+                glEnable(GL_DEPTH_TEST);
+                glDepthMask(GL_TRUE);
+                glDisable(GL_BLEND);
+                glEnable(GL_CULL_FACE);
+                glUseProgram(shaderProgram);
+                glUniformMatrix4fv(u_viewLoc, 1, GL_FALSE, glm::value_ptr(blockPreviewView));
+                glUniformMatrix4fv(u_projLoc, 1, GL_FALSE, glm::value_ptr(blockPreviewProj));
+                glUniformMatrix4fv(u_modelLoc, 1, GL_FALSE, glm::value_ptr(blockPreviewModel));
+                glUniform1f(u_sunIntensity_location, 1.0f);
+                glUniform1f(u_ambientBase_location, 0.55f);
+                glUniform1i(u_isWater_location, 0);
+                glViewport(x + itemPadding, screenH - (y + itemPadding + itemSize), itemSize, itemSize);
+                glClear(GL_DEPTH_BUFFER_BIT);
+                renderSingleBlockModel(itemId);
+                glViewport(0, 0, screenW, screenH);
                 glDisable(GL_DEPTH_TEST);
                 glDepthMask(GL_FALSE);
                 glEnable(GL_BLEND);
@@ -2742,6 +2851,7 @@ void renderInventory(int screenW, int screenH) {
 
     const int hbStartX = posX + static_cast<int>(8.0f * scaleX);
     const int hbStartY = posY + static_cast<int>(111.0f * scaleY);
+    syncInventoryHotbarFromGameHotbar();
     for (int i = 0; i < 9; ++i) {
         const int invIdx = 27 + i;
         if (playerInventoryItems[invIdx].blockType == 0) continue;
@@ -2752,11 +2862,12 @@ void renderInventory(int screenW, int screenH) {
         const int itemSize = std::max(8, std::min(slotW, slotH) - itemPadding * 2);
         const auto it = itemTypes.find(itemId);
         const bool isBlockItem = (it == itemTypes.end()) || it->second.isBlock;
+        
         if (isBlockItem) {
-            glEnable(GL_SCISSOR_TEST);
-            glScissor(x, screenH - (y + slotH), slotW, slotH);
+            // ===== ТА ЖЕ ЛОГИКА ДЛЯ 3D-БЛОКОВ =====
+            glUseProgram(shaderProgram);
             glEnable(GL_DEPTH_TEST);
-            glDepthMask(GL_TRUE);
+            glEnable(GL_CULL_FACE);
             glDisable(GL_BLEND);
             glEnable(GL_CULL_FACE);
 
@@ -2771,17 +2882,23 @@ void renderInventory(int screenW, int screenH) {
             glViewport(x + itemPadding, screenH - (y + itemPadding + itemSize), itemSize, itemSize);
             glClear(GL_DEPTH_BUFFER_BIT);
             renderSingleBlockModel(itemId);
-            glViewport(0, 0, screenW, screenH);
+            
+            glViewport(oldViewport[0], oldViewport[1], oldViewport[2], oldViewport[3]);
             glDisable(GL_DEPTH_TEST);
+            glDisable(GL_CULL_FACE);
+            glDisable(GL_SCISSOR_TEST);
             glDepthMask(GL_FALSE);
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-            glDisable(GL_SCISSOR_TEST);
+            glUseProgram(uiShaderProgram);
+            
         } else {
+            glBindVertexArray(uiVAO);
             renderItemIconFlat(itemId, x + itemPadding, y + itemPadding, itemSize, screenW, screenH);
         }
     }
-
+    
+    // ===== РИСУЕМ СКРОЛЛЕР =====
     const bool canScroll = maxScrollRow > 0;
     unsigned int scrollTex = canScroll ? inventoryScrollerTexture : inventoryScrollerDisabledTexture;
     if (scrollTex == 0) scrollTex = inventoryScrollerTexture;
@@ -2797,11 +2914,32 @@ void renderInventory(int screenW, int screenH) {
             const float t = (maxScrollRow > 0) ? (static_cast<float>(inventoryScrollRow) / maxScrollRow) : 0.0f;
             scrollerY = trackTopY + static_cast<int>(t * std::max(0, trackH - scrollerH));
         }
-        drawRectangle(trackX, scrollerY, scrollerW, scrollerH, scrollTex, screenW, screenH);
+        
+        // Убеждаемся, что используем правильный шейдер и состояния
+        glUseProgram(uiShaderProgram);
+        glBindVertexArray(uiVAO);
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_CULL_FACE);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        
+        drawRectangle(static_cast<float>(trackX), static_cast<float>(scrollerY), 
+                     static_cast<float>(scrollerW), static_cast<float>(scrollerH), 
+                     scrollTex, screenW, screenH);
     }
     
-    glDisable(GL_BLEND);
-    glDepthMask(GL_TRUE);
+    // ===== ВОССТАНАВЛИВАЕМ ИСХОДНЫЕ СОСТОЯНИЯ =====
+    glViewport(oldViewport[0], oldViewport[1], oldViewport[2], oldViewport[3]);
+    glUseProgram(oldProgram);
+    glBindVertexArray(oldVAO);
+    glBindTexture(GL_TEXTURE_2D, oldTexture);
+    
+    if (depthEnabled) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
+    if (cullEnabled) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
+    if (blendEnabled) glEnable(GL_BLEND); else glDisable(GL_BLEND);
+    if (scissorEnabled) glEnable(GL_SCISSOR_TEST); else glDisable(GL_SCISSOR_TEST);
+    glDepthMask(depthMask);
+    glBlendFunc(blendSrc, blendDst);
 }
 
 void drawHUD(int screenW, int screenH, float currentTime)
