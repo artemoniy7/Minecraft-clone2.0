@@ -149,10 +149,13 @@ void addFaceToVertices(std::vector<float>& verts,
         int count;          // Количество
     };
     
-    // В классе Game или глобально:
-    InventoryItem hotbarItems[9] = {
-        {1, 64}, {2, 64}, {3, 64}, {4, 64}, {5, 8}, 
-        {6, 64}, {7, 64}, {8, 32}, {9, 16}
+    // Единый инвентарь игрока: 4x9 (36 слотов).
+    // Последние 9 слотов [27..35] используются как хотбар и в HUD, и в меню инвентаря.
+    InventoryItem playerInventoryItems[36] = {
+        {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0},
+        {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0},
+        {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0},
+        {1, 64}, {2, 64}, {3, 64}, {4, 64}, {5, 8}, {6, 64}, {7, 64}, {8, 32}, {9, 16}
     };
     // Инвентарь игрока: 3x9 + 9 слотов хотбара (всего 36).
     // Последние 9 слотов дублируют текущий хотбар.
@@ -2726,75 +2729,13 @@ void renderInventory(int screenW, int screenH) {
                 glUniform1f(u_ambientBase_location, 0.55f);
                 glUniform1i(u_isWater_location, 0);
 
-                glViewport(x + itemPadding, screenH - (y + itemPadding + itemSize), itemSize, itemSize);
-                glClear(GL_DEPTH_BUFFER_BIT);
-                renderSingleBlockModel(itemId);
-                glViewport(0, 0, screenW, screenH);
-                glDisable(GL_DEPTH_TEST);
-                glDepthMask(GL_FALSE);
-                glEnable(GL_BLEND);
-                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-                glDisable(GL_SCISSOR_TEST);
-            } else {
-                renderItemIconFlat(itemId, x + itemPadding, y + itemPadding, itemSize, screenW, screenH);
-            }
-        }
-    }
-
-    const int playerInvStartX = posX + static_cast<int>(8.0f * scaleX);
-    const int playerInvStartY = posY + static_cast<int>(58.0f * scaleY);
-    const int playerInvCols = 9;
-    const int playerInvRows = 3;
-    for (int row = 0; row < playerInvRows; ++row) {
-        for (int col = 0; col < playerInvCols; ++col) {
-            const int idx = row * playerInvCols + col;
+    for (int row = 0; row < 3; ++row) {
+        for (int col = 0; col < 9; ++col) {
+            const int idx = row * 9 + col;
             if (playerInventoryItems[idx].blockType == 0) continue;
             const int itemId = playerInventoryItems[idx].blockType;
-            const int x = playerInvStartX + col * slotW;
-            const int y = playerInvStartY + row * slotH;
-            const int itemPadding = std::max(1, std::min(slotW, slotH) / 8);
-            const int itemSize = std::max(8, std::min(slotW, slotH) - itemPadding * 2);
-            const auto it = itemTypes.find(itemId);
-            const bool isBlockItem = (it == itemTypes.end()) || it->second.isBlock;
-            if (isBlockItem) {
-                glEnable(GL_SCISSOR_TEST);
-                glScissor(x, screenH - (y + slotH), slotW, slotH);
-                glEnable(GL_DEPTH_TEST);
-                glDepthMask(GL_TRUE);
-                glDisable(GL_BLEND);
-                glEnable(GL_CULL_FACE);
-                glUseProgram(shaderProgram);
-                glUniformMatrix4fv(u_viewLoc, 1, GL_FALSE, glm::value_ptr(blockPreviewView));
-                glUniformMatrix4fv(u_projLoc, 1, GL_FALSE, glm::value_ptr(blockPreviewProj));
-                glUniformMatrix4fv(u_modelLoc, 1, GL_FALSE, glm::value_ptr(blockPreviewModel));
-                glUniform1f(u_sunIntensity_location, 1.0f);
-                glUniform1f(u_ambientBase_location, 0.55f);
-                glUniform1i(u_isWater_location, 0);
-                glViewport(x + itemPadding, screenH - (y + itemPadding + itemSize), itemSize, itemSize);
-                renderSingleBlockModel(itemId);
-                glViewport(0, 0, screenW, screenH);
-                glDisable(GL_DEPTH_TEST);
-                glDepthMask(GL_FALSE);
-                glEnable(GL_BLEND);
-                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-                glDisable(GL_SCISSOR_TEST);
-            } else {
-                renderItemIconFlat(itemId, x + itemPadding, y + itemPadding, itemSize, screenW, screenH);
-            }
-        }
-    }
-
-    const int playerInvStartX = posX + static_cast<int>(8.0f * scaleX);
-    const int playerInvStartY = posY + static_cast<int>(58.0f * scaleY);
-    const int playerInvCols = 9;
-    const int playerInvRows = 3;
-    for (int row = 0; row < playerInvRows; ++row) {
-        for (int col = 0; col < playerInvCols; ++col) {
-            const int idx = row * playerInvCols + col;
-            if (playerInventoryItems[idx].blockType == 0) continue;
-            const int itemId = playerInventoryItems[idx].blockType;
-            const int x = playerInvStartX + col * slotW;
-            const int y = playerInvStartY + row * slotH;
+            const int x = posX + static_cast<int>(8.0f * scaleX) + col * slotW;
+            const int y = posY + static_cast<int>(58.0f * scaleY) + row * slotH;
             const int itemPadding = std::max(1, std::min(slotW, slotH) / 8);
             const int itemSize = std::max(8, std::min(slotW, slotH) - itemPadding * 2);
             const auto it = itemTypes.find(itemId);
@@ -3109,9 +3050,10 @@ void drawHUD(int screenW, int screenH, float currentTime)
 
     for (int i = 0; i < HOTBAR_SLOTS; i++)
     {
-        if (hotbarItems[i].blockType == 0) continue;
+        const int invIdx = 27 + i;
+        if (playerInventoryItems[invIdx].blockType == 0) continue;
 
-        const int itemId = hotbarItems[i].blockType;
+        const int itemId = playerInventoryItems[invIdx].blockType;
         const auto itemIt = itemTypes.find(itemId);
         const bool isBlockItem = (itemIt == itemTypes.end()) || itemIt->second.isBlock;
 
