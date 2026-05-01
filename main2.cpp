@@ -2663,6 +2663,16 @@ void renderInventory(int screenW, int screenH) {
     const float scaleY = INV_H / 136.0f;
     const int slotW = static_cast<int>(18.0f * scaleX);
     const int slotH = static_cast<int>(18.0f * scaleY);
+    const glm::mat4 blockPreviewProj = glm::perspective(glm::radians(25.0f), 1.0f, 0.01f, 100.0f);
+    const glm::mat4 blockPreviewView = glm::lookAt(glm::vec3(0.0f, 0.0f, 3.5f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    const glm::mat4 blockPreviewModel = glm::scale(
+        glm::rotate(
+            glm::rotate(glm::mat4(1.0f), glm::radians(30.0f), glm::vec3(1.0f, 0.0f, 0.0f)),
+            glm::radians(225.0f), glm::vec3(0.0f, 1.0f, 0.0f)
+        ),
+        glm::vec3(0.87f)
+    );
+
     const int listStartX = posX + static_cast<int>(8.0f * scaleX);
     const int listStartY = posY + static_cast<int>(17.0f * scaleY);
     const int listCols = 9;
@@ -2693,70 +2703,31 @@ void renderInventory(int screenW, int screenH) {
             const int itemSize = std::max(8, std::min(slotW, slotH) - itemPadding * 2);
             const auto it = itemTypes.find(itemId);
             const bool isBlockItem = (it == itemTypes.end()) || it->second.isBlock;
-            
             if (isBlockItem) {
-                // ===== ПОЛНОСТЬЮ СОХРАНЯЕМ И ПЕРЕКЛЮЧАЕМ СОСТОЯНИЯ =====
-                glUseProgram(shaderProgram);  // Переключаем на шейдер мира
-                
-                // Включаем то, что нужно для 3D
+                glEnable(GL_SCISSOR_TEST);
+                glScissor(x, screenH - (y + slotH), slotW, slotH);
                 glEnable(GL_DEPTH_TEST);
-                glEnable(GL_CULL_FACE);
+                glDepthMask(GL_TRUE);
                 glDisable(GL_BLEND);
                 glEnable(GL_CULL_FACE);
 
-                glm::mat4 proj = glm::perspective(glm::radians(25.0f), 1.0f, 0.01f, 100.0f);
-                glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 3.5f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-                glm::mat4 model = glm::mat4(1.0f);
-                model = glm::rotate(model, glm::radians(30.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-                model = glm::rotate(model, glm::radians(225.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-                model = glm::scale(model, glm::vec3(0.87f));
-
                 glUseProgram(shaderProgram);
-                glUniformMatrix4fv(u_viewLoc, 1, GL_FALSE, glm::value_ptr(view));
-                glUniformMatrix4fv(u_projLoc, 1, GL_FALSE, glm::value_ptr(proj));
-                glUniformMatrix4fv(u_modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+                glUniformMatrix4fv(u_viewLoc, 1, GL_FALSE, glm::value_ptr(blockPreviewView));
+                glUniformMatrix4fv(u_projLoc, 1, GL_FALSE, glm::value_ptr(blockPreviewProj));
+                glUniformMatrix4fv(u_modelLoc, 1, GL_FALSE, glm::value_ptr(blockPreviewModel));
                 glUniform1f(u_sunIntensity_location, 1.0f);
                 glUniform1f(u_ambientBase_location, 0.55f);
                 glUniform1i(u_isWater_location, 0);
 
                 glViewport(x + itemPadding, screenH - (y + itemPadding + itemSize), itemSize, itemSize);
-                
-                // Сбрасываем буфер глубины только для этой области
-                glClear(GL_DEPTH_BUFFER_BIT);
-                
-                // Матрицы для 3D-превью
-                glm::mat4 proj = glm::perspective(glm::radians(25.0f), 1.0f, 0.01f, 100.0f);
-                glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 3.5f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-                glm::mat4 model = glm::mat4(1.0f);
-                model = glm::rotate(model, glm::radians(30.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-                model = glm::rotate(model, glm::radians(225.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-                model = glm::scale(model, glm::vec3(0.87f));
-                
-                glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
-                glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
-                glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(proj));
-                glUniform1f(glGetUniformLocation(shaderProgram, "u_sunIntensity"), 1.0f);
-                glUniform1f(glGetUniformLocation(shaderProgram, "u_ambientBase"), 0.55f);
-                glUniform1i(glGetUniformLocation(shaderProgram, "u_isWater"), 0);
-                
-                // Рендерим 3D-блок
                 renderSingleBlockModel(itemId);
-                
-                // ===== ВОССТАНАВЛИВАЕМ СОСТОЯНИЯ ДЛЯ 2D =====
-                glViewport(oldViewport[0], oldViewport[1], oldViewport[2], oldViewport[3]);
-                
-                // Возвращаем состояния для продолжения 2D-рендеринга
+                glViewport(0, 0, screenW, screenH);
                 glDisable(GL_DEPTH_TEST);
-                glDisable(GL_CULL_FACE);
-                glDisable(GL_SCISSOR_TEST);
                 glDepthMask(GL_FALSE);
                 glEnable(GL_BLEND);
                 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-                glUseProgram(uiShaderProgram);
-                
+                glDisable(GL_SCISSOR_TEST);
             } else {
-                // Для 2D-предметов используем плоскую иконку
-                glBindVertexArray(uiVAO);
                 renderItemIconFlat(itemId, x + itemPadding, y + itemPadding, itemSize, screenW, screenH);
             }
         }
@@ -2784,16 +2755,10 @@ void renderInventory(int screenW, int screenH) {
                 glDepthMask(GL_TRUE);
                 glDisable(GL_BLEND);
                 glEnable(GL_CULL_FACE);
-                glm::mat4 proj = glm::perspective(glm::radians(25.0f), 1.0f, 0.01f, 100.0f);
-                glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 3.5f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-                glm::mat4 model = glm::mat4(1.0f);
-                model = glm::rotate(model, glm::radians(30.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-                model = glm::rotate(model, glm::radians(225.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-                model = glm::scale(model, glm::vec3(0.87f));
                 glUseProgram(shaderProgram);
-                glUniformMatrix4fv(u_viewLoc, 1, GL_FALSE, glm::value_ptr(view));
-                glUniformMatrix4fv(u_projLoc, 1, GL_FALSE, glm::value_ptr(proj));
-                glUniformMatrix4fv(u_modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+                glUniformMatrix4fv(u_viewLoc, 1, GL_FALSE, glm::value_ptr(blockPreviewView));
+                glUniformMatrix4fv(u_projLoc, 1, GL_FALSE, glm::value_ptr(blockPreviewProj));
+                glUniformMatrix4fv(u_modelLoc, 1, GL_FALSE, glm::value_ptr(blockPreviewModel));
                 glUniform1f(u_sunIntensity_location, 1.0f);
                 glUniform1f(u_ambientBase_location, 0.55f);
                 glUniform1i(u_isWater_location, 0);
@@ -2833,17 +2798,10 @@ void renderInventory(int screenW, int screenH) {
             glDisable(GL_BLEND);
             glEnable(GL_CULL_FACE);
 
-            glm::mat4 proj = glm::perspective(glm::radians(25.0f), 1.0f, 0.01f, 100.0f);
-            glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 3.5f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-            glm::mat4 model = glm::mat4(1.0f);
-            model = glm::rotate(model, glm::radians(30.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-            model = glm::rotate(model, glm::radians(225.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-            model = glm::scale(model, glm::vec3(0.87f));
-
             glUseProgram(shaderProgram);
-            glUniformMatrix4fv(u_viewLoc, 1, GL_FALSE, glm::value_ptr(view));
-            glUniformMatrix4fv(u_projLoc, 1, GL_FALSE, glm::value_ptr(proj));
-            glUniformMatrix4fv(u_modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+            glUniformMatrix4fv(u_viewLoc, 1, GL_FALSE, glm::value_ptr(blockPreviewView));
+            glUniformMatrix4fv(u_projLoc, 1, GL_FALSE, glm::value_ptr(blockPreviewProj));
+            glUniformMatrix4fv(u_modelLoc, 1, GL_FALSE, glm::value_ptr(blockPreviewModel));
             glUniform1f(u_sunIntensity_location, 1.0f);
             glUniform1f(u_ambientBase_location, 0.55f);
             glUniform1i(u_isWater_location, 0);
