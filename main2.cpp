@@ -2587,8 +2587,6 @@ void drawDimOverlay(int screenW, int screenH, float alpha) {
 void renderInventory(int screenW, int screenH) {
     if (!inventoryTexture) return;
     
-    // Масштаб UI инвентаря относительно базовой текстуры 195x136.
-    // Держим единый коэффициент, чтобы слоты, блоки и скроллер не "разъезжались".
     constexpr float INVENTORY_UI_SCALE = 2.6f;
     const int INV_W = static_cast<int>(195.0f * INVENTORY_UI_SCALE);
     const int INV_H = static_cast<int>(136.0f * INVENTORY_UI_SCALE);
@@ -2596,13 +2594,35 @@ void renderInventory(int screenW, int screenH) {
     int posX = (screenW - INV_W) / 2;
     int posY = (screenH - INV_H) / 2;
     
+    // ===== СОХРАНЯЕМ ВСЕ СОСТОЯНИЯ OPENGL =====
+    GLboolean depthEnabled = glIsEnabled(GL_DEPTH_TEST);
+    GLboolean cullEnabled = glIsEnabled(GL_CULL_FACE);
+    GLboolean blendEnabled = glIsEnabled(GL_BLEND);
+    GLboolean scissorEnabled = glIsEnabled(GL_SCISSOR_TEST);
+    GLboolean depthMask;
+    glGetBooleanv(GL_DEPTH_WRITEMASK, &depthMask);
+    GLint oldViewport[4];
+    glGetIntegerv(GL_VIEWPORT, oldViewport);
+    GLint oldProgram;
+    glGetIntegerv(GL_CURRENT_PROGRAM, &oldProgram);
+    GLint oldTexture;
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &oldTexture);
+    GLint oldVAO;
+    glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &oldVAO);
+    GLint blendSrc, blendDst;
+    glGetIntegerv(GL_BLEND_SRC_ALPHA, &blendSrc);
+    glGetIntegerv(GL_BLEND_DST_ALPHA, &blendDst);
+    
+    // ===== РИСУЕМ ФОН ИНВЕНТАРЯ (2D) =====
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
     glDepthMask(GL_FALSE);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     
-    // Подкладываем ровную панель под PNG, чтобы полупрозрачные пиксели не давали чёрные полосы.
+    glUseProgram(uiShaderProgram);
+    
+    // Фон панели
     drawColorRectangle(
         static_cast<float>(posX),
         static_cast<float>(posY),
@@ -2622,166 +2642,209 @@ void renderInventory(int screenW, int screenH) {
         glm::vec4(0.18f, 0.18f, 0.18f, 1.0f),
         2.0f
     );
-
-    drawRectangle(posX, posY, INV_W, INV_H, inventoryTexture, screenW, screenH);
-
-    // Настройка 3D-превью блоков в инвентаре: как в хотбаре.
-    glm::mat4 invProj = glm::perspective(glm::radians(25.0f), 1.0f, 0.01f, 100.0f);
-    glm::mat4 invView = glm::lookAt(glm::vec3(0.0f, 0.0f, 3.5f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-    glm::mat4 invModel = glm::mat4(1.0f);
-    invModel = glm::rotate(invModel, glm::radians(30.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-    invModel = glm::rotate(invModel, glm::radians(225.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-    invModel = glm::scale(invModel, glm::vec3(0.87f));
-
-    glUseProgram(shaderProgram);
-    glUniformMatrix4fv(u_viewLoc, 1, GL_FALSE, glm::value_ptr(invView));
-    glUniformMatrix4fv(u_projLoc, 1, GL_FALSE, glm::value_ptr(invProj));
-    glUniformMatrix4fv(u_modelLoc, 1, GL_FALSE, glm::value_ptr(invModel));
-    glUniform1f(u_sunIntensity_location, 1.0f);
-    glUniform1f(u_ambientBase_location, 0.55f);
-    glUniform1i(u_isWater_location, 0);
-
+    
+    // Текстура инвентаря
+    drawRectangle(static_cast<float>(posX), static_cast<float>(posY), 
+                  static_cast<float>(INV_W), static_cast<float>(INV_H), 
+                  inventoryTexture, screenW, screenH);
+    
+    // ===== ВЫЧИСЛЯЕМ РАЗМЕРЫ СЛОТОВ =====
     const float scaleX = INV_W / 195.0f;
     const float scaleY = INV_H / 136.0f;
     const int slotW = static_cast<int>(18.0f * scaleX);
     const int slotH = static_cast<int>(18.0f * scaleY);
-
     const int listStartX = posX + static_cast<int>(8.0f * scaleX);
     const int listStartY = posY + static_cast<int>(17.0f * scaleY);
     const int listCols = 9;
     const int listRowsVisible = 5;
-    const int slotStepX = std::max(1, static_cast<int>(slotW * 1.2f));
-
+    const int slotSpacingX = slotW + 1;  // +4 для зазора между слотами
+    
+    // ===== СОБИРАЕМ ВСЕ ПРЕДМЕТЫ =====
     std::vector<int> allItemIds;
     allItemIds.reserve(itemTypes.size());
     for (const auto& kv : itemTypes) allItemIds.push_back(kv.first);
     std::sort(allItemIds.begin(), allItemIds.end());
-
+    
     const int totalRows = static_cast<int>((allItemIds.size() + listCols - 1) / listCols);
     const int maxScrollRow = std::max(0, totalRows - listRowsVisible);
     inventoryScrollRow = std::clamp(inventoryScrollRow, 0, maxScrollRow);
-
+    
+    // ===== РИСУЕМ ПРЕДМЕТЫ =====
     const int startIndex = inventoryScrollRow * listCols;
     for (int row = 0; row < listRowsVisible; ++row) {
         for (int col = 0; col < listCols; ++col) {
             const int idx = startIndex + row * listCols + col;
             if (idx < 0 || idx >= static_cast<int>(allItemIds.size())) continue;
+            
             const int itemId = allItemIds[idx];
-            const int x = listStartX + col * slotStepX;
-            const int y = listStartY + row * slotH;
-            const int itemPadding = std::max(1, std::min(slotW, slotH) / 8);
+            const int x = listStartX + col * slotSpacingX;
+            const int y = listStartY + row * slotH - 1;
+            const int itemPadding = 2;
             const int itemSize = std::max(8, std::min(slotW, slotH) - itemPadding * 2);
+            
             const auto it = itemTypes.find(itemId);
             const bool isBlockItem = (it == itemTypes.end()) || it->second.isBlock;
+            
             if (isBlockItem) {
-                glEnable(GL_SCISSOR_TEST);
-                glScissor(x, screenH - (y + slotH), slotW, slotH);
+                // ===== ПОЛНОСТЬЮ СОХРАНЯЕМ И ПЕРЕКЛЮЧАЕМ СОСТОЯНИЯ =====
+                glUseProgram(shaderProgram);  // Переключаем на шейдер мира
+                
+                // Включаем то, что нужно для 3D
                 glEnable(GL_DEPTH_TEST);
-                glDepthMask(GL_TRUE);
-                glDisable(GL_BLEND);
                 glEnable(GL_CULL_FACE);
-
+                glDisable(GL_BLEND);
+                glDepthMask(GL_TRUE);
+                glEnable(GL_SCISSOR_TEST);
+                
+                // Обрезаем область рендеринга под слот
+                glScissor(x, screenH - (y + slotH), slotW, slotH);
+                glViewport(x + itemPadding, screenH - (y + itemPadding + itemSize), itemSize, itemSize);
+                
+                // Сбрасываем буфер глубины только для этой области
+                glClear(GL_DEPTH_BUFFER_BIT);
+                
+                // Матрицы для 3D-превью
                 glm::mat4 proj = glm::perspective(glm::radians(25.0f), 1.0f, 0.01f, 100.0f);
                 glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 3.5f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
                 glm::mat4 model = glm::mat4(1.0f);
                 model = glm::rotate(model, glm::radians(30.0f), glm::vec3(1.0f, 0.0f, 0.0f));
                 model = glm::rotate(model, glm::radians(225.0f), glm::vec3(0.0f, 1.0f, 0.0f));
                 model = glm::scale(model, glm::vec3(0.87f));
-
-                glUseProgram(shaderProgram);
-                glUniformMatrix4fv(u_viewLoc, 1, GL_FALSE, glm::value_ptr(view));
-                glUniformMatrix4fv(u_projLoc, 1, GL_FALSE, glm::value_ptr(proj));
-                glUniformMatrix4fv(u_modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-                glUniform1f(u_sunIntensity_location, 1.0f);
-                glUniform1f(u_ambientBase_location, 0.55f);
-                glUniform1i(u_isWater_location, 0);
-
-                glViewport(x + itemPadding, screenH - (y + itemPadding + itemSize), itemSize, itemSize);
-                glDisable(GL_CULL_FACE);
+                
+                glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
+                glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
+                glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(proj));
+                glUniform1f(glGetUniformLocation(shaderProgram, "u_sunIntensity"), 1.0f);
+                glUniform1f(glGetUniformLocation(shaderProgram, "u_ambientBase"), 0.55f);
+                glUniform1i(glGetUniformLocation(shaderProgram, "u_isWater"), 0);
+                
+                // Рендерим 3D-блок
                 renderSingleBlockModel(itemId);
-                glEnable(GL_CULL_FACE);
-                glViewport(0, 0, screenW, screenH);
-
+                
+                // ===== ВОССТАНАВЛИВАЕМ СОСТОЯНИЯ ДЛЯ 2D =====
+                glViewport(oldViewport[0], oldViewport[1], oldViewport[2], oldViewport[3]);
+                
+                // Возвращаем состояния для продолжения 2D-рендеринга
                 glDisable(GL_DEPTH_TEST);
+                glDisable(GL_CULL_FACE);
+                glDisable(GL_SCISSOR_TEST);
                 glDepthMask(GL_FALSE);
                 glEnable(GL_BLEND);
                 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-                glDisable(GL_SCISSOR_TEST);
+                glUseProgram(uiShaderProgram);
+                
             } else {
+                // Для 2D-предметов используем плоскую иконку
+                glBindVertexArray(uiVAO);
                 renderItemIconFlat(itemId, x + itemPadding, y + itemPadding, itemSize, screenW, screenH);
             }
         }
     }
-
+    
+    // ===== РИСУЕМ ХОТБАР ВНУТРИ ИНВЕНТАРЯ =====
     const int hbStartX = posX + static_cast<int>(8.0f * scaleX);
     const int hbStartY = posY + static_cast<int>(111.0f * scaleY);
+    
     for (int i = 0; i < 9; ++i) {
         if (hotbarItems[i].blockType == 0) continue;
+        
         const int itemId = hotbarItems[i].blockType;
-        const int x = hbStartX + i * slotStepX;
+        const int x = hbStartX + i * slotSpacingX;
         const int y = hbStartY;
-        const int itemPadding = std::max(1, std::min(slotW, slotH) / 8);
+        const int itemPadding = 2;
         const int itemSize = std::max(8, std::min(slotW, slotH) - itemPadding * 2);
+        
         const auto it = itemTypes.find(itemId);
         const bool isBlockItem = (it == itemTypes.end()) || it->second.isBlock;
+        
         if (isBlockItem) {
-            glEnable(GL_SCISSOR_TEST);
-            glScissor(x, screenH - (y + slotH), slotW, slotH);
+            // ===== ТА ЖЕ ЛОГИКА ДЛЯ 3D-БЛОКОВ =====
+            glUseProgram(shaderProgram);
             glEnable(GL_DEPTH_TEST);
-            glDepthMask(GL_TRUE);
-            glDisable(GL_BLEND);
             glEnable(GL_CULL_FACE);
-
+            glDisable(GL_BLEND);
+            glDepthMask(GL_TRUE);
+            glEnable(GL_SCISSOR_TEST);
+            
+            glScissor(x, screenH - (y + slotH), slotW, slotH);
+            glViewport(x + itemPadding, screenH - (y + itemPadding + itemSize), itemSize, itemSize);
+            glClear(GL_DEPTH_BUFFER_BIT);
+            
             glm::mat4 proj = glm::perspective(glm::radians(25.0f), 1.0f, 0.01f, 100.0f);
             glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 3.5f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
             glm::mat4 model = glm::mat4(1.0f);
             model = glm::rotate(model, glm::radians(30.0f), glm::vec3(1.0f, 0.0f, 0.0f));
             model = glm::rotate(model, glm::radians(225.0f), glm::vec3(0.0f, 1.0f, 0.0f));
             model = glm::scale(model, glm::vec3(0.87f));
-
-            glUseProgram(shaderProgram);
-            glUniformMatrix4fv(u_viewLoc, 1, GL_FALSE, glm::value_ptr(view));
-            glUniformMatrix4fv(u_projLoc, 1, GL_FALSE, glm::value_ptr(proj));
-            glUniformMatrix4fv(u_modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-            glUniform1f(u_sunIntensity_location, 1.0f);
-            glUniform1f(u_ambientBase_location, 0.55f);
-            glUniform1i(u_isWater_location, 0);
-
-            glViewport(x + itemPadding, screenH - (y + itemPadding + itemSize), itemSize, itemSize);
-            glDisable(GL_CULL_FACE);
+            
+            glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
+            glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
+            glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(proj));
+            glUniform1f(glGetUniformLocation(shaderProgram, "u_sunIntensity"), 1.0f);
+            glUniform1f(glGetUniformLocation(shaderProgram, "u_ambientBase"), 0.55f);
+            glUniform1i(glGetUniformLocation(shaderProgram, "u_isWater"), 0);
+            
             renderSingleBlockModel(itemId);
-            glEnable(GL_CULL_FACE);
-            glViewport(0, 0, screenW, screenH);
+            
+            glViewport(oldViewport[0], oldViewport[1], oldViewport[2], oldViewport[3]);
             glDisable(GL_DEPTH_TEST);
+            glDisable(GL_CULL_FACE);
+            glDisable(GL_SCISSOR_TEST);
             glDepthMask(GL_FALSE);
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-            glDisable(GL_SCISSOR_TEST);
+            glUseProgram(uiShaderProgram);
+            
         } else {
+            glBindVertexArray(uiVAO);
             renderItemIconFlat(itemId, x + itemPadding, y + itemPadding, itemSize, screenW, screenH);
         }
     }
-
+    
+    // ===== РИСУЕМ СКРОЛЛЕР =====
     const bool canScroll = maxScrollRow > 0;
     unsigned int scrollTex = canScroll ? inventoryScrollerTexture : inventoryScrollerDisabledTexture;
     if (scrollTex == 0) scrollTex = inventoryScrollerTexture;
+    
     if (scrollTex != 0) {
-        const int trackX = posX + static_cast<int>(174.0f * scaleX) + 1;
+        const int trackX = posX + static_cast<int>(174.0f * scaleX) + 3;
         const int trackTopY = posY + static_cast<int>(17.0f * scaleY);
         const int trackBottomY = posY + static_cast<int>(126.0f * scaleY);
         const int trackH = std::max(1, trackBottomY - trackTopY);
         const int scrollerW = std::max(8, static_cast<int>((186.0f - 174.0f) * scaleX));
         const int scrollerH = std::max(8, static_cast<int>(15.0f * scaleY));
+        
         int scrollerY = trackTopY;
         if (canScroll) {
             const float t = (maxScrollRow > 0) ? (static_cast<float>(inventoryScrollRow) / maxScrollRow) : 0.0f;
             scrollerY = trackTopY + static_cast<int>(t * std::max(0, trackH - scrollerH));
         }
-        drawRectangle(trackX, scrollerY, scrollerW, scrollerH, scrollTex, screenW, screenH);
+        
+        // Убеждаемся, что используем правильный шейдер и состояния
+        glUseProgram(uiShaderProgram);
+        glBindVertexArray(uiVAO);
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_CULL_FACE);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        
+        drawRectangle(static_cast<float>(trackX), static_cast<float>(scrollerY), 
+                     static_cast<float>(scrollerW), static_cast<float>(scrollerH), 
+                     scrollTex, screenW, screenH);
     }
     
-    glDisable(GL_BLEND);
-    glDepthMask(GL_TRUE);
+    // ===== ВОССТАНАВЛИВАЕМ ИСХОДНЫЕ СОСТОЯНИЯ =====
+    glViewport(oldViewport[0], oldViewport[1], oldViewport[2], oldViewport[3]);
+    glUseProgram(oldProgram);
+    glBindVertexArray(oldVAO);
+    glBindTexture(GL_TEXTURE_2D, oldTexture);
+    
+    if (depthEnabled) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
+    if (cullEnabled) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
+    if (blendEnabled) glEnable(GL_BLEND); else glDisable(GL_BLEND);
+    if (scissorEnabled) glEnable(GL_SCISSOR_TEST); else glDisable(GL_SCISSOR_TEST);
+    glDepthMask(depthMask);
+    glBlendFunc(blendSrc, blendDst);
 }
 
 void drawHUD(int screenW, int screenH, float currentTime)
