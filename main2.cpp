@@ -2720,6 +2720,7 @@ void renderInventory(int screenW, int screenH) {
                 glUniform1i(u_isWater_location, 0);
 
                 glViewport(x + itemPadding, screenH - (y + itemPadding + itemSize), itemSize, itemSize);
+                glClear(GL_DEPTH_BUFFER_BIT);
                 renderSingleBlockModel(itemId);
                 glViewport(0, 0, screenW, screenH);
                 glDisable(GL_DEPTH_TEST);
@@ -2776,9 +2777,56 @@ void renderInventory(int screenW, int screenH) {
         }
     }
 
+    const int playerInvStartX = posX + static_cast<int>(8.0f * scaleX);
+    const int playerInvStartY = posY + static_cast<int>(58.0f * scaleY);
+    const int playerInvCols = 9;
+    const int playerInvRows = 3;
+    for (int row = 0; row < playerInvRows; ++row) {
+        for (int col = 0; col < playerInvCols; ++col) {
+            const int idx = row * playerInvCols + col;
+            if (playerInventoryItems[idx].blockType == 0) continue;
+            const int itemId = playerInventoryItems[idx].blockType;
+            const int x = playerInvStartX + col * slotW;
+            const int y = playerInvStartY + row * slotH;
+            const int itemPadding = std::max(1, std::min(slotW, slotH) / 8);
+            const int itemSize = std::max(8, std::min(slotW, slotH) - itemPadding * 2);
+            const auto it = itemTypes.find(itemId);
+            const bool isBlockItem = (it == itemTypes.end()) || it->second.isBlock;
+            if (isBlockItem) {
+                glEnable(GL_SCISSOR_TEST);
+                glScissor(x, screenH - (y + slotH), slotW, slotH);
+                glEnable(GL_DEPTH_TEST);
+                glDepthMask(GL_TRUE);
+                glDisable(GL_BLEND);
+                glEnable(GL_CULL_FACE);
+                glUseProgram(shaderProgram);
+                glUniformMatrix4fv(u_viewLoc, 1, GL_FALSE, glm::value_ptr(blockPreviewView));
+                glUniformMatrix4fv(u_projLoc, 1, GL_FALSE, glm::value_ptr(blockPreviewProj));
+                glUniformMatrix4fv(u_modelLoc, 1, GL_FALSE, glm::value_ptr(blockPreviewModel));
+                glUniform1f(u_sunIntensity_location, 1.0f);
+                glUniform1f(u_ambientBase_location, 0.55f);
+                glUniform1i(u_isWater_location, 0);
+                glViewport(x + itemPadding, screenH - (y + itemPadding + itemSize), itemSize, itemSize);
+                glClear(GL_DEPTH_BUFFER_BIT);
+                renderSingleBlockModel(itemId);
+                glViewport(0, 0, screenW, screenH);
+                glDisable(GL_DEPTH_TEST);
+                glDepthMask(GL_FALSE);
+                glEnable(GL_BLEND);
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                glDisable(GL_SCISSOR_TEST);
+            } else {
+                renderItemIconFlat(itemId, x + itemPadding, y + itemPadding, itemSize, screenW, screenH);
+            }
+        }
+    }
+
     const int hbStartX = posX + static_cast<int>(8.0f * scaleX);
     const int hbStartY = posY + static_cast<int>(111.0f * scaleY);
     
+    for (int i = 0; i < 9; ++i) {
+        playerInventoryItems[27 + i] = hotbarItems[i];
+    }
     for (int i = 0; i < 9; ++i) {
         const int invIdx = 27 + i;
         if (playerInventoryItems[invIdx].blockType == 0) continue;
@@ -2808,21 +2856,6 @@ void renderInventory(int screenW, int screenH) {
 
             glViewport(x + itemPadding, screenH - (y + itemPadding + itemSize), itemSize, itemSize);
             glClear(GL_DEPTH_BUFFER_BIT);
-            
-            glm::mat4 proj = glm::perspective(glm::radians(25.0f), 1.0f, 0.01f, 100.0f);
-            glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 3.5f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-            glm::mat4 model = glm::mat4(1.0f);
-            model = glm::rotate(model, glm::radians(30.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-            model = glm::rotate(model, glm::radians(225.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-            model = glm::scale(model, glm::vec3(0.87f));
-            
-            glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
-            glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
-            glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(proj));
-            glUniform1f(glGetUniformLocation(shaderProgram, "u_sunIntensity"), 1.0f);
-            glUniform1f(glGetUniformLocation(shaderProgram, "u_ambientBase"), 0.55f);
-            glUniform1i(glGetUniformLocation(shaderProgram, "u_isWater"), 0);
-            
             renderSingleBlockModel(itemId);
             
             glViewport(oldViewport[0], oldViewport[1], oldViewport[2], oldViewport[3]);
