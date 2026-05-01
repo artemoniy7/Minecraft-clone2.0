@@ -154,6 +154,14 @@ void addFaceToVertices(std::vector<float>& verts,
         {1, 64}, {2, 64}, {3, 64}, {4, 64}, {5, 8}, 
         {6, 64}, {7, 64}, {8, 32}, {9, 16}
     };
+    // Инвентарь игрока: 3x9 + 9 слотов хотбара (всего 36).
+    // Последние 9 слотов дублируют текущий хотбар.
+    InventoryItem playerInventoryItems[36] = {
+        {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0},
+        {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0},
+        {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0},
+        {1, 64}, {2, 64}, {3, 64}, {4, 64}, {5, 8}, {6, 64}, {7, 64}, {8, 32}, {9, 16}
+    };
 void drawDimOverlay(int screenW, int screenH, float alpha);
 void renderInventory(int screenW, int screenH);
 unsigned int loadUITexture(const char* path);
@@ -2587,6 +2595,11 @@ void drawDimOverlay(int screenW, int screenH, float alpha) {
 void renderInventory(int screenW, int screenH) {
     if (!inventoryTexture) return;
     
+<<<<<<< codex/fix-disappearing-inventory-menu-blocks-4gz3mw
+    // Масштаб UI инвентаря относительно базовой текстуры 195x136.
+    // Держим единый коэффициент, чтобы слоты, блоки и скроллер не "разъезжались".
+=======
+>>>>>>> main
     constexpr float INVENTORY_UI_SCALE = 2.6f;
     const int INV_W = static_cast<int>(195.0f * INVENTORY_UI_SCALE);
     const int INV_H = static_cast<int>(136.0f * INVENTORY_UI_SCALE);
@@ -2677,11 +2690,18 @@ void renderInventory(int screenW, int screenH) {
             if (idx < 0 || idx >= static_cast<int>(allItemIds.size())) continue;
             
             const int itemId = allItemIds[idx];
+<<<<<<< codex/fix-disappearing-inventory-menu-blocks-4gz3mw
+            const int x = listStartX + col * slotW;
+            const int y = listStartY + row * slotH;
+            const int itemPadding = std::max(1, std::min(slotW, slotH) / 8);
+            const int itemSize = std::max(8, std::min(slotW, slotH) - itemPadding * 2);
+=======
             const int x = listStartX + col * slotSpacingX;
             const int y = listStartY + row * slotH - 1;
             const int itemPadding = 2;
             const int itemSize = std::max(8, std::min(slotW, slotH) - itemPadding * 2);
             
+>>>>>>> main
             const auto it = itemTypes.find(itemId);
             const bool isBlockItem = (it == itemTypes.end()) || it->second.isBlock;
             
@@ -2693,11 +2713,31 @@ void renderInventory(int screenW, int screenH) {
                 glEnable(GL_DEPTH_TEST);
                 glEnable(GL_CULL_FACE);
                 glDisable(GL_BLEND);
+<<<<<<< codex/fix-disappearing-inventory-menu-blocks-4gz3mw
+                glEnable(GL_CULL_FACE);
+
+                glm::mat4 proj = glm::perspective(glm::radians(25.0f), 1.0f, 0.01f, 100.0f);
+                glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 3.5f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+                glm::mat4 model = glm::mat4(1.0f);
+                model = glm::rotate(model, glm::radians(30.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+                model = glm::rotate(model, glm::radians(225.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+                model = glm::scale(model, glm::vec3(0.87f));
+
+                glUseProgram(shaderProgram);
+                glUniformMatrix4fv(u_viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+                glUniformMatrix4fv(u_projLoc, 1, GL_FALSE, glm::value_ptr(proj));
+                glUniformMatrix4fv(u_modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+                glUniform1f(u_sunIntensity_location, 1.0f);
+                glUniform1f(u_ambientBase_location, 0.55f);
+                glUniform1i(u_isWater_location, 0);
+
+=======
                 glDepthMask(GL_TRUE);
                 glEnable(GL_SCISSOR_TEST);
                 
                 // Обрезаем область рендеринга под слот
                 glScissor(x, screenH - (y + slotH), slotW, slotH);
+>>>>>>> main
                 glViewport(x + itemPadding, screenH - (y + itemPadding + itemSize), itemSize, itemSize);
                 
                 // Сбрасываем буфер глубины только для этой области
@@ -2740,12 +2780,74 @@ void renderInventory(int screenW, int screenH) {
             }
         }
     }
+<<<<<<< codex/fix-disappearing-inventory-menu-blocks-4gz3mw
+
+    const int playerInvStartX = posX + static_cast<int>(8.0f * scaleX);
+    const int playerInvStartY = posY + static_cast<int>(58.0f * scaleY);
+    const int playerInvCols = 9;
+    const int playerInvRows = 3;
+    for (int row = 0; row < playerInvRows; ++row) {
+        for (int col = 0; col < playerInvCols; ++col) {
+            const int idx = row * playerInvCols + col;
+            if (playerInventoryItems[idx].blockType == 0) continue;
+            const int itemId = playerInventoryItems[idx].blockType;
+            const int x = playerInvStartX + col * slotW;
+            const int y = playerInvStartY + row * slotH;
+            const int itemPadding = std::max(1, std::min(slotW, slotH) / 8);
+            const int itemSize = std::max(8, std::min(slotW, slotH) - itemPadding * 2);
+            const auto it = itemTypes.find(itemId);
+            const bool isBlockItem = (it == itemTypes.end()) || it->second.isBlock;
+            if (isBlockItem) {
+                glEnable(GL_SCISSOR_TEST);
+                glScissor(x, screenH - (y + slotH), slotW, slotH);
+                glEnable(GL_DEPTH_TEST);
+                glDepthMask(GL_TRUE);
+                glDisable(GL_BLEND);
+                glEnable(GL_CULL_FACE);
+                glm::mat4 proj = glm::perspective(glm::radians(25.0f), 1.0f, 0.01f, 100.0f);
+                glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 3.5f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+                glm::mat4 model = glm::mat4(1.0f);
+                model = glm::rotate(model, glm::radians(30.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+                model = glm::rotate(model, glm::radians(225.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+                model = glm::scale(model, glm::vec3(0.87f));
+                glUseProgram(shaderProgram);
+                glUniformMatrix4fv(u_viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+                glUniformMatrix4fv(u_projLoc, 1, GL_FALSE, glm::value_ptr(proj));
+                glUniformMatrix4fv(u_modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+                glUniform1f(u_sunIntensity_location, 1.0f);
+                glUniform1f(u_ambientBase_location, 0.55f);
+                glUniform1i(u_isWater_location, 0);
+                glViewport(x + itemPadding, screenH - (y + itemPadding + itemSize), itemSize, itemSize);
+                renderSingleBlockModel(itemId);
+                glViewport(0, 0, screenW, screenH);
+                glDisable(GL_DEPTH_TEST);
+                glDepthMask(GL_FALSE);
+                glEnable(GL_BLEND);
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                glDisable(GL_SCISSOR_TEST);
+            } else {
+                renderItemIconFlat(itemId, x + itemPadding, y + itemPadding, itemSize, screenW, screenH);
+            }
+        }
+    }
+
+=======
     
     // ===== РИСУЕМ ХОТБАР ВНУТРИ ИНВЕНТАРЯ =====
+>>>>>>> main
     const int hbStartX = posX + static_cast<int>(8.0f * scaleX);
     const int hbStartY = posY + static_cast<int>(111.0f * scaleY);
     
     for (int i = 0; i < 9; ++i) {
+<<<<<<< codex/fix-disappearing-inventory-menu-blocks-4gz3mw
+        const int invIdx = 27 + i;
+        if (playerInventoryItems[invIdx].blockType == 0) continue;
+        const int itemId = playerInventoryItems[invIdx].blockType;
+        const int x = hbStartX + i * slotW;
+        const int y = hbStartY;
+        const int itemPadding = std::max(1, std::min(slotW, slotH) / 8);
+        const int itemSize = std::max(8, std::min(slotW, slotH) - itemPadding * 2);
+=======
         if (hotbarItems[i].blockType == 0) continue;
         
         const int itemId = hotbarItems[i].blockType;
@@ -2754,6 +2856,7 @@ void renderInventory(int screenW, int screenH) {
         const int itemPadding = 2;
         const int itemSize = std::max(8, std::min(slotW, slotH) - itemPadding * 2);
         
+>>>>>>> main
         const auto it = itemTypes.find(itemId);
         const bool isBlockItem = (it == itemTypes.end()) || it->second.isBlock;
         
@@ -2763,10 +2866,30 @@ void renderInventory(int screenW, int screenH) {
             glEnable(GL_DEPTH_TEST);
             glEnable(GL_CULL_FACE);
             glDisable(GL_BLEND);
+<<<<<<< codex/fix-disappearing-inventory-menu-blocks-4gz3mw
+            glEnable(GL_CULL_FACE);
+
+            glm::mat4 proj = glm::perspective(glm::radians(25.0f), 1.0f, 0.01f, 100.0f);
+            glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 3.5f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+            glm::mat4 model = glm::mat4(1.0f);
+            model = glm::rotate(model, glm::radians(30.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+            model = glm::rotate(model, glm::radians(225.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+            model = glm::scale(model, glm::vec3(0.87f));
+
+            glUseProgram(shaderProgram);
+            glUniformMatrix4fv(u_viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+            glUniformMatrix4fv(u_projLoc, 1, GL_FALSE, glm::value_ptr(proj));
+            glUniformMatrix4fv(u_modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+            glUniform1f(u_sunIntensity_location, 1.0f);
+            glUniform1f(u_ambientBase_location, 0.55f);
+            glUniform1i(u_isWater_location, 0);
+
+=======
             glDepthMask(GL_TRUE);
             glEnable(GL_SCISSOR_TEST);
             
             glScissor(x, screenH - (y + slotH), slotW, slotH);
+>>>>>>> main
             glViewport(x + itemPadding, screenH - (y + itemPadding + itemSize), itemSize, itemSize);
             glClear(GL_DEPTH_BUFFER_BIT);
             
@@ -2805,15 +2928,23 @@ void renderInventory(int screenW, int screenH) {
     const bool canScroll = maxScrollRow > 0;
     unsigned int scrollTex = canScroll ? inventoryScrollerTexture : inventoryScrollerDisabledTexture;
     if (scrollTex == 0) scrollTex = inventoryScrollerTexture;
+<<<<<<< codex/fix-disappearing-inventory-menu-blocks-4gz3mw
+    if (scrollTex != 0) {
+        const int trackX = posX + static_cast<int>(174.0f * scaleX) + 1;
+=======
     
     if (scrollTex != 0) {
         const int trackX = posX + static_cast<int>(174.0f * scaleX) + 3;
+>>>>>>> main
         const int trackTopY = posY + static_cast<int>(17.0f * scaleY);
         const int trackBottomY = posY + static_cast<int>(126.0f * scaleY);
         const int trackH = std::max(1, trackBottomY - trackTopY);
         const int scrollerW = std::max(8, static_cast<int>((186.0f - 174.0f) * scaleX));
         const int scrollerH = std::max(8, static_cast<int>(15.0f * scaleY));
+<<<<<<< codex/fix-disappearing-inventory-menu-blocks-4gz3mw
+=======
         
+>>>>>>> main
         int scrollerY = trackTopY;
         if (canScroll) {
             const float t = (maxScrollRow > 0) ? (static_cast<float>(inventoryScrollRow) / maxScrollRow) : 0.0f;
